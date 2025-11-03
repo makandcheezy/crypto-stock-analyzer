@@ -19,6 +19,14 @@ struct MarketRecord {
     std::string type;
 };
 
+int timetoSeconds(const std::string& timestamp) {
+    std::tm tm = {};
+    std::stringstream ss(timestamp);
+    std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+
+    return static_cast<int>(std::mktime(&tm));
+}
+
 struct PerformanceMetrics {
     double buildTime;
     double rangeQuery100;

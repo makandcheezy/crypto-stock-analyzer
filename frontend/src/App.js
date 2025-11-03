@@ -38,7 +38,7 @@ function App() {
     const [performanceMetrics, setPerformanceMetrics] = useState(null);
     const [realPerformanceData, setRealPerformanceData] = useState(null);
     const [marketData, setMarketData] = useState(allData);
-
+    const [totalRecords, setTotalRecords] = useState(null);
     React.useEffect(() => {
         fetch('/market_data.json')
             .then(response => response.json())
@@ -66,66 +66,70 @@ function App() {
 
     const runQuery = () => {
         setIsLoading(true);
+        const query = {};
+        if(queryType === 'ticker') {
+            query.queryType = 'ticker';
+            query.ticker = tickerInput;
+        } else if(queryType === 'dateRange') {
+            query.queryType = 'dateRange';
+            query.startDate = startDate;
+            query.endDate = endDate;
+        } else if(queryType === 'priceRange') {
+            query.queryType = 'priceRange';
+            query.minPrice = parseFloat(minPrice);
+            query.maxPrice = parseFloat(maxPrice);
+        }
+        fetch('http://localhost:8080/api/query', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(query)
+        })
+            .then(response => response.json())
+            .then(data => {
+                var results = [];
+                var totalRecords = null;
+                if(Array.isArray(data.results) && data.results) {
+                    results = data.results;
+                    totalRecords = data.size;
+                    setTotalRecords(totalRecords);
+                } else {
+                    results = [];
+                }
+                setResults(results);
+                const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
+                let btreeTime, bplusTime, btreeMem, bplusMem, btreeBuild, bplusBuild;
+                if(realPerformanceData && realPerformanceData[index]) {
+                    btreeTime = realPerformanceData[index].btree.rangeQuery100.toFixed(4);
+                    bplusTime = realPerformanceData[index].bplustree.rangeQuery100.toFixed(4);
+                    btreeMem = realPerformanceData[index].btree.memory.toFixed(4);
+                    bplusMem = realPerformanceData[index].bplustree.memory.toFixed(4);
+                    btreeBuild = realPerformanceData[index].btree.buildTime.toFixed(4);
+                    bplusBuild = realPerformanceData[index].bplustree.buildTime.toFixed(4);
+                }
+                const improvement = (((parseFloat(btreeTime) - parseFloat(bplusTime)) / parseFloat(btreeTime)) * 100).toFixed(1);
 
-        setTimeout(() => {
-            let filtered = [...marketData];
-
-            if (queryType === 'ticker' && tickerInput) {
-                filtered = filtered.filter(item =>
-                    item.symbol.toLowerCase().includes(tickerInput.toLowerCase()) ||
-                    item.name.toLowerCase().includes(tickerInput.toLowerCase())
-                );
-            } else if (queryType === 'dateRange') {
-                filtered = filtered.filter(item => {
-                    const itemDate = item.timestamp.split(' ')[0];
-                    return itemDate >= startDate && itemDate <= endDate;
+                setPerformanceMetrics({
+                    btree: {
+                        query: btreeTime,
+                        memory: btreeMem,
+                        build: btreeBuild
+                    },
+                    bplustree: {
+                        query: bplusTime,
+                        memory: bplusMem,
+                        build: bplusBuild
+                    },
+                    improvement: improvement,
+                    recordsFound: results.length
                 });
-            } else if (queryType === 'priceRange') {
-                const min = parseFloat(minPrice) || 0;
-                const max = parseFloat(maxPrice) || Infinity;
-                filtered = filtered.filter(item => item.price >= min && item.price <= max);
-            }
-
-            const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
-            let btreeTime, bplusTime, btreeMem, bplusMem, btreeBuild, bplusBuild;
-
-            if (realPerformanceData && realPerformanceData[index]) {
-                btreeTime = realPerformanceData[index].btree.rangeQuery100.toFixed(4);
-                bplusTime = realPerformanceData[index].bplustree.rangeQuery100.toFixed(4);
-                btreeMem = realPerformanceData[index].btree.memory.toFixed(1);
-                bplusMem = realPerformanceData[index].bplustree.memory.toFixed(1);
-                btreeBuild = realPerformanceData[index].btree.buildTime.toFixed(3);
-                bplusBuild = realPerformanceData[index].bplustree.buildTime.toFixed(3);
-            } else {
-                const baseTime = indexType === 'timestamp' ? 0.0082 : 0.0091;
-                btreeTime = (baseTime * (0.9 + Math.random() * 0.2)).toFixed(4);
-                bplusTime = (baseTime * 0.52 * (0.9 + Math.random() * 0.2)).toFixed(4);
-                btreeMem = indexType === 'timestamp' ? '48.2' : '49.1';
-                bplusMem = indexType === 'timestamp' ? '52.7' : '53.8';
-                btreeBuild = indexType === 'timestamp' ? '2.341' : '2.456';
-                bplusBuild = indexType === 'timestamp' ? '2.518' : '2.634';
-            }
-
-            const improvement = (((parseFloat(btreeTime) - parseFloat(bplusTime)) / parseFloat(btreeTime)) * 100).toFixed(1);
-
-            setPerformanceMetrics({
-                btree: {
-                    query: btreeTime,
-                    memory: btreeMem,
-                    build: btreeBuild
-                },
-                bplustree: {
-                    query: bplusTime,
-                    memory: bplusMem,
-                    build: bplusBuild
-                },
-                improvement: improvement,
-                recordsFound: filtered.length
+                setIsLoading(false);
+            })
+            .catch(error => {
+                console.log('Error:', error);
+                setIsLoading(false);
             });
-
-            setResults(filtered);
-            setIsLoading(false);
-        }, 800);
     };
 
     const performanceChartData = performanceMetrics ? [
@@ -223,7 +227,7 @@ function App() {
                         Crypto & Stock Market Data Analyzer
                     </h1>
                     <div className="text-sm text-gray-400">
-                        <div><span className="text-gray-500">Total Records:</span> <span className="font-semibold text-white">{marketData.length}</span></div>
+                        <div><span className="text-gray-500">Total Records:</span> <span className="font-semibold text-white">{totalRecords}</span></div>
                     </div>
                 </div>
 
