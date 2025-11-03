@@ -187,13 +187,11 @@ int main() {
             response["size"] = records.size();
             response["queryType"] = query_type;
             std::cout << response.dump() << std::endl;
-            std::cout.flush();
         } catch (const std::exception& e) {
             std::cerr << "Error: " << e.what() << std::endl;
             json error_response = json::object();
             error_response["error"] = e.what();
             std::cout << error_response.dump() << std::endl;
-            std::cout.flush();
         }
     }
     for(auto record_ptr : records) {
