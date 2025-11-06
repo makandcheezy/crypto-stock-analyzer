@@ -1,0 +1,227 @@
+<html>
+<head>
+<title>BPlus.h</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #bcbec4;}
+.s2 { color: #b3ae60;}
+.s3 { color: #6aab73;}
+.s4 { color: #cf8e6d;}
+.s5 { color: #bcbec4;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+BPlus.h</font>
+</center></td></tr></table>
+<pre><span class="s0">// Created by Isaac Probst on 11/3/2025.</span>
+<span class="s2">#ifndef </span><span class="s1">BPLUSTREE_BPLUS_H</span>
+<span class="s2">#define </span><span class="s1">BPLUSTREE_BPLUS_H</span>
+<span class="s2">#include </span><span class="s3">&lt;algorithm&gt;</span>
+<span class="s2">#include </span><span class="s3">&lt;iostream&gt;</span>
+<span class="s2">#include </span><span class="s3">&lt;ranges&gt;</span>
+<span class="s2">#include </span><span class="s3">&lt;vector&gt;</span>
+<span class="s4">using namespace </span><span class="s1">std</span><span class="s5">;</span>
+
+    <span class="s0">// VAL STRUCT</span>
+    <span class="s4">struct </span><span class="s1">MarketRecord </span><span class="s5">{</span>
+        <span class="s1">string timestamp</span><span class="s5">;</span>
+        <span class="s1">string name</span><span class="s5">;</span>
+        <span class="s1">string symbol</span><span class="s5">;</span>
+        <span class="s1">string type</span><span class="s5">;</span>
+        <span class="s4">double </span><span class="s1">price</span><span class="s5">;</span>
+        <span class="s4">double </span><span class="s1">high</span><span class="s5">;</span>
+        <span class="s4">double </span><span class="s1">low</span><span class="s5">;</span>
+        <span class="s4">double </span><span class="s1">volume</span><span class="s5">;</span>
+        <span class="s1">MarketRecord</span><span class="s5">(</span><span class="s1">string timestamp</span><span class="s5">,</span>
+            <span class="s1">string name</span><span class="s5">, </span><span class="s1">string symbol</span><span class="s5">, </span><span class="s4">double </span><span class="s1">price</span><span class="s5">,</span>
+            <span class="s4">double </span><span class="s1">high</span><span class="s5">, </span><span class="s4">double </span><span class="s1">low</span><span class="s5">, </span><span class="s4">double </span><span class="s1">volume</span><span class="s5">,</span>
+            <span class="s1">string type</span><span class="s5">) </span><span class="s1">: timestamp</span><span class="s5">(</span><span class="s1">timestamp</span><span class="s5">),</span>
+            <span class="s1">name</span><span class="s5">(</span><span class="s1">name</span><span class="s5">), </span><span class="s1">symbol</span><span class="s5">(</span><span class="s1">symbol</span><span class="s5">), </span><span class="s1">price</span><span class="s5">(</span><span class="s1">price</span><span class="s5">),</span>
+            <span class="s1">high</span><span class="s5">(</span><span class="s1">high</span><span class="s5">), </span><span class="s1">low</span><span class="s5">(</span><span class="s1">low</span><span class="s5">), </span><span class="s1">volume</span><span class="s5">(</span><span class="s1">volume</span><span class="s5">), </span><span class="s1">type</span><span class="s5">(</span><span class="s1">type</span><span class="s5">) {}</span>
+    <span class="s5">};</span>
+
+    <span class="s0">// NODE STRUCT</span>
+    <span class="s4">struct </span><span class="s1">Node </span><span class="s5">{</span>
+        <span class="s4">bool </span><span class="s1">isLeaf</span><span class="s5">;</span>
+        <span class="s4">static const int </span><span class="s1">order </span><span class="s5">= </span><span class="s6">5</span><span class="s5">;</span>
+        <span class="s4">int </span><span class="s1">keyCount</span><span class="s5">;</span>
+        <span class="s4">int </span><span class="s1">keys</span><span class="s5">[</span><span class="s1">order</span><span class="s5">-</span><span class="s6">1</span><span class="s5">];</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">children</span><span class="s5">[</span><span class="s1">order</span><span class="s5">];</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">next</span><span class="s5">;</span>
+        <span class="s1">MarketRecord</span><span class="s5">* </span><span class="s1">data</span><span class="s5">[</span><span class="s1">order</span><span class="s5">-</span><span class="s6">1</span><span class="s5">];</span>
+
+        <span class="s1">Node</span><span class="s5">(</span><span class="s4">bool </span><span class="s1">leaf </span><span class="s5">= </span><span class="s4">false</span><span class="s5">) </span><span class="s1">: isLeaf</span><span class="s5">(</span><span class="s1">leaf</span><span class="s5">), </span><span class="s1">keyCount</span><span class="s5">(</span><span class="s6">0</span><span class="s5">), </span><span class="s1">next</span><span class="s5">(</span><span class="s4">nullptr</span><span class="s5">) {</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">order</span><span class="s5">-</span><span class="s6">1</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                <span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s6">0</span><span class="s5">;</span>
+                <span class="s1">data</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s4">nullptr</span><span class="s5">;</span>
+            <span class="s5">}</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">order</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                <span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s4">nullptr</span><span class="s5">;</span>
+            <span class="s5">}</span>
+        <span class="s5">}</span>
+    <span class="s5">};</span>
+
+<span class="s0">// B+ TREE CLASS</span>
+<span class="s4">class </span><span class="s1">BPlus </span><span class="s5">{</span>
+<span class="s4">private</span><span class="s1">:</span>
+    <span class="s0">// VARIABLES AND CONSTRUCTORS</span>
+    <span class="s4">static const int </span><span class="s1">order </span><span class="s5">= </span><span class="s6">5</span><span class="s5">;</span>
+    <span class="s4">static const int </span><span class="s1">maxKeys </span><span class="s5">= </span><span class="s1">order</span><span class="s5">-</span><span class="s6">1</span><span class="s5">;</span>
+    <span class="s4">static const int </span><span class="s1">minKeys </span><span class="s5">= </span><span class="s1">maxKeys</span><span class="s5">/</span><span class="s6">2</span><span class="s5">;</span>
+    <span class="s1">Node</span><span class="s5">* </span><span class="s1">root </span><span class="s5">= </span><span class="s4">nullptr</span><span class="s5">;</span>
+
+<span class="s4">public</span><span class="s1">:</span>
+    <span class="s0">// FUNCTIONS</span>
+    <span class="s1">BPlus</span><span class="s5">() </span><span class="s1">: root</span><span class="s5">(</span><span class="s4">nullptr</span><span class="s5">) {}</span>
+
+
+    <span class="s1">Node</span><span class="s5">* </span><span class="s1">findLeaf</span><span class="s5">(</span><span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">, </span><span class="s4">int </span><span class="s1">key</span><span class="s5">) {</span>
+        <span class="s4">if </span><span class="s5">(</span><span class="s1">node </span><span class="s5">== </span><span class="s4">nullptr</span><span class="s5">) {</span>
+            <span class="s4">return nullptr</span><span class="s5">;</span>
+        <span class="s5">}</span>
+        <span class="s4">if </span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">isLeaf</span><span class="s5">) {</span>
+            <span class="s4">return </span><span class="s1">node</span><span class="s5">;</span>
+        <span class="s5">}</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                <span class="s4">if </span><span class="s5">(</span><span class="s1">key </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">]) {</span>
+                    <span class="s4">return </span><span class="s1">findLeaf</span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">], </span><span class="s1">key</span><span class="s5">);</span>
+                <span class="s5">}</span>
+            <span class="s5">}</span>
+        <span class="s5">}</span>
+
+
+    <span class="s1">Node</span><span class="s5">* </span><span class="s1">splitLeaf</span><span class="s5">(</span><span class="s1">Node</span><span class="s5">* </span><span class="s1">leaf</span><span class="s5">) {</span>
+        <span class="s4">int </span><span class="s1">split </span><span class="s5">= </span><span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">/</span><span class="s6">2</span><span class="s5">;</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">newLeaf </span><span class="s5">= </span><span class="s4">new </span><span class="s1">Node</span><span class="s5">(</span><span class="s4">true</span><span class="s5">);</span>
+        <span class="s1">newLeaf</span><span class="s5">-&gt;</span><span class="s1">next </span><span class="s5">= </span><span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">next</span><span class="s5">;</span>
+        <span class="s1">newLeaf</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">= </span><span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">- </span><span class="s1">split</span><span class="s5">;</span>
+
+        <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">newLeaf</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+            <span class="s1">newLeaf</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i </span><span class="s5">+ </span><span class="s1">split</span><span class="s5">];</span>
+            <span class="s1">newLeaf</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">i </span><span class="s5">+ </span><span class="s1">split</span><span class="s5">];</span>
+        <span class="s5">}</span>
+        <span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">next </span><span class="s5">= </span><span class="s1">newLeaf</span><span class="s5">;</span>
+        <span class="s1">leaf</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">= </span><span class="s1">split</span><span class="s5">;</span>
+        <span class="s4">return </span><span class="s1">newLeaf</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s1">Node</span><span class="s5">* </span><span class="s1">splitInternal</span><span class="s5">(</span><span class="s1">Node</span><span class="s5">* </span><span class="s1">internal</span><span class="s5">) {</span>
+        <span class="s4">int </span><span class="s1">split </span><span class="s5">= </span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">/</span><span class="s6">2</span><span class="s5">;</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">newInternal </span><span class="s5">= </span><span class="s4">new </span><span class="s1">Node</span><span class="s5">(</span><span class="s4">false</span><span class="s5">);</span>
+        <span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">= </span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">- </span><span class="s1">split </span><span class="s5">- </span><span class="s6">1</span><span class="s5">;</span>
+        <span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">= </span><span class="s1">split</span><span class="s5">;</span>
+
+        <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+            <span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i </span><span class="s5">+ </span><span class="s1">split </span><span class="s5">+ </span><span class="s1">i</span><span class="s5">];</span>
+            <span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] = </span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">i </span><span class="s5">+ </span><span class="s1">split </span><span class="s5">+ </span><span class="s1">i</span><span class="s5">];</span>
+        <span class="s5">}</span>
+        <span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">newInternal</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">] = </span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">];</span>
+        <span class="s1">internal</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">= </span><span class="s1">split</span><span class="s5">;</span>
+        <span class="s4">return </span><span class="s1">newInternal</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s4">void </span><span class="s1">printTree</span><span class="s5">(</span><span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">, </span><span class="s4">int </span><span class="s1">level </span><span class="s5">= </span><span class="s6">0</span><span class="s5">) {</span>
+        <span class="s4">if</span><span class="s5">(</span><span class="s1">node </span><span class="s5">!= </span><span class="s4">nullptr</span><span class="s5">) {</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">level</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                <span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s3">&quot;  &quot;</span><span class="s5">;</span>
+            <span class="s5">}</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                <span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] &lt;&lt; </span><span class="s3">&quot; &quot;</span><span class="s5">;</span>
+            <span class="s5">} </span><span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s1">endl</span><span class="s5">;</span>
+            <span class="s4">if </span><span class="s5">(!</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">isLeaf</span><span class="s5">) {</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i </span><span class="s5">&lt;= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                    <span class="s1">printTree</span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">], </span><span class="s1">level</span><span class="s5">+</span><span class="s6">1</span><span class="s5">);</span>
+                <span class="s5">}</span>
+            <span class="s5">}</span>
+        <span class="s5">} </span><span class="s4">else </span><span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s3">&quot;Empty Tree&quot; </span><span class="s5">&lt;&lt; </span><span class="s1">endl</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s4">void </span><span class="s1">print</span><span class="s5">() {</span>
+        <span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s3">&quot;B+ Tree Print: &quot; </span><span class="s5">&lt;&lt; </span><span class="s1">endl</span><span class="s5">;</span>
+        <span class="s1">printTree</span><span class="s5">(</span><span class="s1">root</span><span class="s5">);</span>
+        <span class="s1">cout </span><span class="s5">&lt;&lt; </span><span class="s1">endl</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s1">vector</span><span class="s5">&lt;</span><span class="s1">MarketRecord</span><span class="s5">*&gt; </span><span class="s1">rangeQuery</span><span class="s5">(</span><span class="s4">int </span><span class="s1">low</span><span class="s5">, </span><span class="s4">int </span><span class="s1">high</span><span class="s5">, </span><span class="s1">vector</span><span class="s5">&lt;</span><span class="s1">MarketRecord</span><span class="s5">*&gt;&amp; </span><span class="s1">ret</span><span class="s5">) {</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">=</span><span class="s1">root</span><span class="s5">;</span>
+
+        <span class="s0">//Find leaf</span>
+        <span class="s4">while </span><span class="s5">(</span><span class="s1">node </span><span class="s5">!= </span><span class="s4">nullptr </span><span class="s5">&amp;&amp; !</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">isLeaf</span><span class="s5">) {</span>
+            <span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">;</span>
+            <span class="s4">while </span><span class="s5">(</span><span class="s1">i</span><span class="s5">&lt;</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">&amp;&amp; </span><span class="s1">low </span><span class="s5">&gt;= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">]) {</span>
+                <span class="s1">i</span><span class="s5">++;</span>
+            <span class="s5">}</span>
+            <span class="s1">node </span><span class="s5">= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">];</span>
+        <span class="s5">}</span>
+
+        <span class="s0">//Traverse leaf nodes</span>
+        <span class="s4">while </span><span class="s5">(</span><span class="s1">node </span><span class="s5">!= </span><span class="s4">nullptr</span><span class="s5">) {</span>
+            <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">j </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">j </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">j</span><span class="s5">++) {</span>
+                <span class="s4">if </span><span class="s5">(</span><span class="s1">high </span><span class="s5">&gt;= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">j</span><span class="s5">] &amp;&amp; </span><span class="s1">low </span><span class="s5">&lt;= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">j</span><span class="s5">]) {</span>
+                    <span class="s1">ret</span><span class="s5">.</span><span class="s1">push_back</span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">j</span><span class="s5">]);</span>
+                <span class="s5">}</span>
+                <span class="s4">else if </span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">j</span><span class="s5">] &gt; </span><span class="s1">high</span><span class="s5">) {</span>
+                    <span class="s4">return </span><span class="s1">ret</span><span class="s5">;</span>
+                <span class="s5">}</span>
+            <span class="s5">}</span>
+            <span class="s1">node </span><span class="s5">= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">next</span><span class="s5">;</span>
+        <span class="s5">}</span>
+        <span class="s4">return </span><span class="s1">ret</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s4">int </span><span class="s1">findKeyIndex</span><span class="s5">(</span><span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">, </span><span class="s4">int </span><span class="s1">key</span><span class="s5">) {</span>
+        <span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">;</span>
+        <span class="s4">while</span><span class="s5">(</span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">&amp;&amp; </span><span class="s1">key </span><span class="s5">&gt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">]) {</span>
+            <span class="s1">i</span><span class="s5">++;</span>
+        <span class="s5">}</span>
+        <span class="s4">return </span><span class="s1">i</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s1">MarketRecord</span><span class="s5">* </span><span class="s1">search</span><span class="s5">(</span><span class="s4">int </span><span class="s1">key</span><span class="s5">) {</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">=</span><span class="s1">root</span><span class="s5">;</span>
+
+        <span class="s4">while </span><span class="s5">(</span><span class="s1">node </span><span class="s5">!= </span><span class="s4">nullptr </span><span class="s5">&amp;&amp; !</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">isLeaf</span><span class="s5">) {</span>
+            <span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">;</span>
+            <span class="s4">while </span><span class="s5">(</span><span class="s1">i</span><span class="s5">&lt;</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">&amp;&amp; </span><span class="s1">key </span><span class="s5">&gt;= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">]) {</span>
+                <span class="s1">i</span><span class="s5">++;</span>
+            <span class="s5">}</span>
+            <span class="s1">node </span><span class="s5">= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">];</span>
+        <span class="s5">}</span>
+
+                <span class="s4">for </span><span class="s5">(</span><span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">; </span><span class="s1">i</span><span class="s5">&lt;</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">; </span><span class="s1">i</span><span class="s5">++) {</span>
+                    <span class="s4">if </span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] == </span><span class="s1">key</span><span class="s5">) {</span>
+                        <span class="s4">return </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">data</span><span class="s5">[</span><span class="s1">i</span><span class="s5">];</span>
+                    <span class="s5">}</span>
+                <span class="s5">}</span>
+        <span class="s4">return nullptr</span><span class="s5">;</span>
+    <span class="s5">}</span>
+
+    <span class="s4">void </span><span class="s1">insert</span><span class="s5">(</span><span class="s4">int </span><span class="s1">key</span><span class="s5">, </span><span class="s1">MarketRecord</span><span class="s5">* </span><span class="s1">record</span><span class="s5">) {</span>
+        <span class="s1">Node</span><span class="s5">* </span><span class="s1">node</span><span class="s5">=</span><span class="s1">root</span><span class="s5">;</span>
+        <span class="s4">while </span><span class="s5">(</span><span class="s1">node </span><span class="s5">!= </span><span class="s4">nullptr</span><span class="s5">) {</span>
+            <span class="s4">int </span><span class="s1">i </span><span class="s5">= </span><span class="s6">0</span><span class="s5">;</span>
+            <span class="s4">while </span><span class="s5">(</span><span class="s1">i</span><span class="s5">&lt;</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">&amp;&amp; </span><span class="s1">key </span><span class="s5">&gt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">]) {</span>
+                <span class="s1">i</span><span class="s5">++;</span>
+            <span class="s5">}</span>
+            <span class="s4">if </span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">isLeaf</span><span class="s5">) {</span>
+                <span class="s4">if </span><span class="s5">(</span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">] &gt; </span><span class="s1">key </span><span class="s5">&amp;&amp; </span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount</span><span class="s5">) {</span>
+                    <span class="s0">//INSERT</span>
+                <span class="s5">} </span><span class="s4">else if </span><span class="s5">(</span><span class="s1">i </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keyCount </span><span class="s5">|| </span><span class="s1">key </span><span class="s5">&lt; </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">keys</span><span class="s5">[</span><span class="s1">i</span><span class="s5">])</span>
+
+                    <span class="s4">return</span><span class="s5">;</span>
+                <span class="s5">}</span>
+            <span class="s5">}</span>
+            <span class="s1">node </span><span class="s5">= </span><span class="s1">node</span><span class="s5">-&gt;</span><span class="s1">children</span><span class="s5">[</span><span class="s1">i</span><span class="s5">];</span>
+        <span class="s5">}</span>
+        <span class="s4">return</span><span class="s5">;</span>
+<span class="s5">};</span>
+
+
+<span class="s2">#endif </span><span class="s0">//BPLUSTREE_BPLUS_H</span></pre>
+</body>
+</html>
