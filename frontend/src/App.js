@@ -1,31 +1,12 @@
+// src/App.js
 import React, { useState } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+    LineChart, Line, BarChart, Bar, XAxis, YAxis,
+    CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
+import PerformanceComparison from './PerformanceComparison';
 
-const sampleStockData = [
-    { timestamp: '2024-01-15 09:00', name: 'Apple', symbol: 'AAPL', price: 185.50, high: 186.20, low: 184.80, volume: 25000000, type: 'STOCK' },
-    { timestamp: '2024-01-15 10:00', name: 'Apple', symbol: 'AAPL', price: 186.20, high: 187.00, low: 185.40, volume: 22000000, type: 'STOCK' },
-    { timestamp: '2024-01-15 11:00', name: 'Microsoft', symbol: 'MSFT', price: 405.30, high: 406.50, low: 404.20, volume: 18000000, type: 'STOCK' },
-    { timestamp: '2024-01-15 12:00', name: 'Tesla', symbol: 'TSLA', price: 215.80, high: 217.20, low: 214.50, volume: 35000000, type: 'STOCK' },
-    { timestamp: '2024-01-16 09:00', name: 'Apple', symbol: 'AAPL', price: 187.00, high: 188.50, low: 186.50, volume: 26000000, type: 'STOCK' },
-    { timestamp: '2024-01-16 10:00', name: 'Microsoft', symbol: 'MSFT', price: 408.90, high: 410.20, low: 407.30, volume: 19000000, type: 'STOCK' },
-    { timestamp: '2024-01-16 11:00', name: 'Tesla', symbol: 'TSLA', price: 218.40, high: 219.80, low: 217.10, volume: 38000000, type: 'STOCK' },
-    { timestamp: '2024-01-17 09:00', name: 'Apple', symbol: 'AAPL', price: 188.30, high: 189.50, low: 187.80, volume: 24000000, type: 'STOCK' },
-];
-
-const sampleCryptoData = [
-    { timestamp: '2024-01-15 09:00', name: 'Bitcoin', symbol: 'BTC', price: 42150.00, volume: 1250000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-15 10:00', name: 'Bitcoin', symbol: 'BTC', price: 42380.00, volume: 1180000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-15 11:00', name: 'Ethereum', symbol: 'ETH', price: 2580.50, volume: 850000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-15 12:00', name: 'Bitcoin', symbol: 'BTC', price: 42290.00, volume: 1420000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-16 09:00', name: 'Bitcoin', symbol: 'BTC', price: 42650.00, volume: 1320000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-16 10:00', name: 'Ethereum', symbol: 'ETH', price: 2620.80, volume: 920000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-16 11:00', name: 'Bitcoin', symbol: 'BTC', price: 43100.00, volume: 1450000000, type: 'CRYPTO' },
-    { timestamp: '2024-01-17 09:00', name: 'Ethereum', symbol: 'ETH', price: 2680.30, volume: 980000000, type: 'CRYPTO' },
-];
-
-const allData = [...sampleStockData, ...sampleCryptoData];
-
-function App() {
+function AppInner() {
     const [queryType, setQueryType] = useState('ticker');
     const [tickerInput, setTickerInput] = useState('');
     const [startDate, setStartDate] = useState('2024-01-15');
@@ -33,186 +14,189 @@ function App() {
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
     const [indexType, setIndexType] = useState('timestamp');
+
     const [results, setResults] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [performanceMetrics, setPerformanceMetrics] = useState(null);
-    const [realPerformanceData, setRealPerformanceData] = useState(null);
-    const [marketData, setMarketData] = useState(allData);
+    const [perfData, setPerfData] = useState(null);
     const [totalRecords, setTotalRecords] = useState(null);
-    React.useEffect(() => {
-        fetch('/market_data.json')
-            .then(response => response.json())
-            .then(data => {
-                setMarketData(data);
-                console.log(`Loaded ${data.length} real market records`);
-            })
-            .catch(error => {
-                console.log('Using sample data (market_data.json not found)');
-                setMarketData(allData);
-            });
-    }, []);
 
-    React.useEffect(() => {
-        fetch('/performance_results.json')
-            .then(response => response.json())
-            .then(data => {
-                setRealPerformanceData(data);
-                console.log('Loaded real performance data');
-            })
-            .catch(error => {
-                console.log('Using sample data (performance_results.json not found)');
-            });
-    }, []);
+    const loadPerf = async () => {
+        try {
+            const r = await fetch(`http://127.0.0.1:8080/api/perf?ts=${Date.now()}`, { cache: 'no-store' });
+            const ct = r.headers.get('content-type') || '';
+            if (!r.ok || !ct.includes('application/json')) throw new Error('perf not json');
+            setPerfData(await r.json());
+        } catch {
+            try {
+                const r2 = await fetch(`/performance_results.json?ts=${Date.now()}`, { cache: 'no-store' });
+                const ct2 = r2.headers.get('content-type') || '';
+                if (!r2.ok || !ct2.includes('application/json')) throw new Error('fallback not json');
+                setPerfData(await r2.json());
+            } catch {
+                setPerfData(null);
+            }
+        }
+    };
 
-    const runQuery = () => {
+    React.useEffect(() => { loadPerf(); }, []);
+
+    const runQuery = async () => {
         setIsLoading(true);
+
         const query = {};
-        if(queryType === 'ticker') {
+        if (queryType === 'ticker') {
             query.queryType = 'ticker';
             query.ticker = tickerInput;
-        } else if(queryType === 'dateRange') {
+        } else if (queryType === 'dateRange') {
             query.queryType = 'dateRange';
             query.startDate = startDate;
             query.endDate = endDate;
-        } else if(queryType === 'priceRange') {
+        } else if (queryType === 'priceRange') {
             query.queryType = 'priceRange';
-            query.minPrice = parseFloat(minPrice);
-            query.maxPrice = parseFloat(maxPrice);
+            query.minPrice = minPrice === '' ? undefined : parseFloat(minPrice);
+            query.maxPrice = maxPrice === '' ? undefined : parseFloat(maxPrice);
         }
-        fetch('http://localhost:8080/api/query', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(query)
-        })
-            .then(response => response.json())
-            .then(data => {
-                var results = [];
-                var totalRecords = null;
-                if(Array.isArray(data.results) && data.results) {
-                    results = data.results;
-                    totalRecords = data.size;
-                    setTotalRecords(totalRecords);
-                } else {
-                    results = [];
-                }
-                setResults(results);
-                const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
-                let btreeTime, bplusTime, btreeMem, bplusMem, btreeBuild, bplusBuild;
-                if(realPerformanceData && realPerformanceData[index]) {
-                    btreeTime = realPerformanceData[index].btree.rangeQuery100.toFixed(4);
-                    bplusTime = realPerformanceData[index].bplustree.rangeQuery100.toFixed(4);
-                    btreeMem = realPerformanceData[index].btree.memory.toFixed(4);
-                    bplusMem = realPerformanceData[index].bplustree.memory.toFixed(4);
-                    btreeBuild = realPerformanceData[index].btree.buildTime.toFixed(4);
-                    bplusBuild = realPerformanceData[index].bplustree.buildTime.toFixed(4);
-                }
-                const improvement = (((parseFloat(btreeTime) - parseFloat(bplusTime)) / parseFloat(btreeTime)) * 100).toFixed(1);
 
-                setPerformanceMetrics({
-                    btree: {
-                        query: btreeTime,
-                        memory: btreeMem,
-                        build: btreeBuild
-                    },
-                    bplustree: {
-                        query: bplusTime,
-                        memory: bplusMem,
-                        build: bplusBuild
-                    },
-                    improvement: improvement,
-                    recordsFound: results.length
-                });
-                setIsLoading(false);
-            })
-            .catch(error => {
-                console.log('Error:', error);
-                setIsLoading(false);
+        // client-side timer as a fallback if backend doesn't return metrics
+        const t0 = performance.now();
+        try {
+            const res = await fetch(`http://127.0.0.1:8080/api/query?ts=${Date.now()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(query)
             });
+            const data = await res.json();
+
+            const rows = Array.isArray(data.results) ? data.results : [];
+            setResults(rows);
+            setTotalRecords(data?.size ?? null);
+
+            // 1) Prefer live metrics from backend if present
+            const live = data?.metrics;
+            const useLive = live && (live.btree || live.bplustree);
+
+            // 2) Otherwise use client-side measured query time
+            const clientQuerySec = (performance.now() - t0) / 1000;
+
+            let btreeQuery = null, bplusQuery = null, btreeMem = null, bplusMem = null, btreeBuild = null, bplusBuild = null;
+
+            if (useLive) {
+                btreeQuery = Number(live?.btree?.querySec);
+                bplusQuery = Number(live?.bplustree?.querySec);
+                btreeMem   = Number(live?.btree?.memoryMB);
+                bplusMem   = Number(live?.bplustree?.memoryMB);
+                btreeBuild = Number(live?.btree?.buildSec);
+                bplusBuild = Number(live?.bplustree?.buildSec);
+            } else {
+                // 3) Fall back to perfData file (static) if available
+                const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
+                const b  = (perfData?.[index]?.btree)     || {};
+                const bp = (perfData?.[index]?.bplustree) || {};
+
+                // use clientQuerySec for B-Tree query if we don't have live metrics
+                btreeQuery = Number.isFinite(Number(b.rangeQuery100)) ? Number(b.rangeQuery100) : clientQuerySec;
+                bplusQuery = Number(bp.rangeQuery100);
+                btreeMem   = Number(b.memory);
+                bplusMem   = Number(bp.memory);
+                btreeBuild = Number(b.buildTime);
+                bplusBuild = Number(bp.buildTime);
+            }
+
+            const improvement = (Number.isFinite(btreeQuery) && btreeQuery !== 0 && Number.isFinite(bplusQuery))
+                ? (((btreeQuery - bplusQuery) / btreeQuery) * 100)
+                : (Number.isFinite(btreeQuery) && !Number.isFinite(bplusQuery))
+                    ? 0 // if only btree is known, show 0% instead of stale 100%
+                    : NaN;
+
+            setPerformanceMetrics({
+                btree: {
+                    query:  Number.isFinite(btreeQuery) ? btreeQuery.toFixed(4) : '—',
+                    memory: Number.isFinite(btreeMem)   ? btreeMem.toFixed(4)   : '—',
+                    build:  Number.isFinite(btreeBuild) ? btreeBuild.toFixed(4) : '—'
+                },
+                bplustree: {
+                    query:  Number.isFinite(bplusQuery) ? bplusQuery.toFixed(4) : '—',
+                    memory: Number.isFinite(bplusMem)   ? bplusMem.toFixed(4)   : '—',
+                    build:  Number.isFinite(bplusBuild) ? bplusBuild.toFixed(4) : '—'
+                },
+                improvement: Number.isFinite(improvement) ? improvement.toFixed(1) : '—',
+                recordsFound: rows.length
+            });
+            setTimeout(() => {
+                fetch('http://127.0.0.1:8080/api/perf?ts=' + Date.now(), { cache: 'no-store' })
+                    .then(r => (r.ok ? r.json() : Promise.reject('perf fetch not ok')))
+                    .then(data => setPerfData(data))
+                    .catch(err => console.log('perf refresh error:', err));
+            }, 800);
+
+            // pull fresh perf blob after each query (no cache)
+            loadPerf();
+        } catch (err) {
+            console.log('Error:', err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const performanceChartData = performanceMetrics ? [
-        { name: 'Query Time', 'B-Tree': parseFloat(performanceMetrics.btree.query) * 1000, 'B+ Tree': parseFloat(performanceMetrics.bplustree.query) * 1000 },
-        { name: 'Build Time', 'B-Tree': parseFloat(performanceMetrics.btree.build), 'B+ Tree': parseFloat(performanceMetrics.bplustree.build) },
+        {
+            name: 'Query Time',
+            'B-Tree':  parseFloat(performanceMetrics.btree.query)     * 1000 || 0,
+            'B+ Tree': parseFloat(performanceMetrics.bplustree.query) * 1000 || 0
+        },
+        {
+            name: 'Build Time',
+            'B-Tree':  parseFloat(performanceMetrics.btree.build)     || 0,
+            'B+ Tree': parseFloat(performanceMetrics.bplustree.build) || 0
+        },
     ] : [];
 
     const getChartData = () => {
         if (results.length === 0) return { type: 'none', data: [] };
-
         const uniqueSymbols = [...new Set(results.map(r => r.symbol))];
 
         if (queryType === 'ticker' && uniqueSymbols.length === 1) {
             const validResults = results
                 .filter(r => r.price && !isNaN(r.price) && r.price > 0)
                 .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
             if (validResults.length === 0) return { type: 'none', data: [] };
 
             const dateGroups = {};
             validResults.forEach(item => {
-                const date = item.timestamp.split(' ')[0];
-                if (!dateGroups[date]) {
-                    dateGroups[date] = { prices: [], count: 0 };
-                }
+                const date = String(item.timestamp).split(' ')[0];
+                if (!dateGroups[date]) dateGroups[date] = { prices: [], count: 0 };
                 dateGroups[date].prices.push(parseFloat(item.price));
                 dateGroups[date].count++;
             });
 
-            const chartPoints = Object.entries(dateGroups).map(([date, data]) => ({
+            const chartPoints = Object.entries(dateGroups).map(([date, d]) => ({
                 name: date,
-                price: parseFloat((data.prices.reduce((a, b) => a + b, 0) / data.count).toFixed(2))
+                price: parseFloat((d.prices.reduce((a, b) => a + b, 0) / d.count).toFixed(2))
             }));
 
             const prices = chartPoints.map(p => p.price);
             const minPrice = Math.min(...prices);
             const maxPrice = Math.max(...prices);
-            const priceRange = maxPrice - minPrice;
+            const range = maxPrice - minPrice;
+            const pad = range > 0 ? range * 0.1 : maxPrice * 0.05;
+            const yMin = Math.max(0, Math.floor(minPrice - pad));
+            const yMax = Math.ceil(maxPrice + pad);
 
-            const padding = priceRange > 0 ? priceRange * 0.1 : maxPrice * 0.05;
-            const yMin = Math.max(0, Math.floor(minPrice - padding));
-            const yMax = Math.ceil(maxPrice + padding);
-
-            return {
-                type: 'price',
-                data: chartPoints,
-                yDomain: [yMin, yMax]
-            };
+            return { type: 'price', data: chartPoints, yDomain: [yMin, yMax] };
         } else if (queryType === 'dateRange') {
             const stockCount = results.filter(r => r.type === 'STOCK').length;
             const cryptoCount = results.filter(r => r.type === 'CRYPTO').length;
-
-            return {
-                type: 'distribution',
-                data: [
-                    { name: 'Stocks', count: stockCount },
-                    { name: 'Crypto', count: cryptoCount }
-                ]
-            };
+            return { type: 'distribution', data: [{ name: 'Stocks', count: stockCount }, { name: 'Crypto', count: cryptoCount }] };
         } else if (queryType === 'priceRange') {
             const symbolCounts = {};
-            results.forEach(r => {
-                if (r.symbol) {
-                    symbolCounts[r.symbol] = (symbolCounts[r.symbol] || 0) + 1;
-                }
-            });
-
+            results.forEach(r => { if (r.symbol) symbolCounts[r.symbol] = (symbolCounts[r.symbol] || 0) + 1; });
             const topSymbols = Object.entries(symbolCounts)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 5)
-                .map(([symbol, count]) => ({
-                    name: symbol,
-                    count: parseInt(count, 10)
-                }));
-
-            console.log('Top 5 symbols:', JSON.stringify(topSymbols, null, 2));
-
-            return {
-                type: 'symbols',
-                data: topSymbols
-            };
+                .map(([symbol, count]) => ({ name: symbol, count: parseInt(count, 10) }));
+            return { type: 'symbols', data: topSymbols };
         }
-
         return { type: 'none', data: [] };
     };
 
@@ -221,18 +205,14 @@ function App() {
     return (
         <div className="min-h-screen bg-black p-6" style={{ fontFamily: "'Space Grotesk', 'Inter', sans-serif" }}>
             <div className="max-w-7xl mx-auto">
-
                 <div className="bg-zinc-900 rounded-lg shadow-lg p-6 mb-6 border border-yellow-500/30">
-                    <h1 className="text-3xl font-bold text-yellow-400 mb-2 tracking-tight">
-                        Crypto & Stock Market Data Analyzer
-                    </h1>
+                    <h1 className="text-3xl font-bold text-yellow-400 mb-2 tracking-tight">Crypto & Stock Market Data Analyzer</h1>
                     <div className="text-sm text-gray-400">
                         <div><span className="text-gray-500">Total Records:</span> <span className="font-semibold text-white">{totalRecords}</span></div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
                     <div className="lg:col-span-1">
                         <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30 sticky top-6">
                             <h2 className="text-lg font-bold text-yellow-400 mb-4">Query Settings</h2>
@@ -336,7 +316,6 @@ function App() {
                     </div>
 
                     <div className="lg:col-span-3 space-y-6">
-
                         {results.length > 0 && (
                             <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
                                 <h2 className="text-lg font-bold text-yellow-400 mb-4">Query Results ({results.length} records)</h2>
@@ -358,10 +337,16 @@ function App() {
                                                 <td className="p-2">{item.timestamp}</td>
                                                 <td className="p-2 text-white">{item.name}</td>
                                                 <td className="p-2 font-mono text-yellow-400">{item.symbol}</td>
-                                                <td className="p-2 text-right font-mono text-white">${item.price.toLocaleString()}</td>
-                                                <td className="p-2 text-right">{(item.volume / 1000000).toFixed(1)}M</td>
+                                                <td className="p-2 text-right font-mono text-white">
+                                                    {Number.isFinite(Number(item.price)) ? `$${Number(item.price).toLocaleString()}` : '—'}
+                                                </td>
+                                                <td className="p-2 text-right">
+                                                    {Number.isFinite(Number(item.volume)) ? `${(Number(item.volume) / 1_000_000).toFixed(1)}M` : '—'}
+                                                </td>
                                                 <td className="p-2 text-center">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${item.type === 'CRYPTO' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${item.type === 'CRYPTO'
+                                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>
                               {item.type}
                             </span>
                                                 </td>
@@ -398,7 +383,9 @@ function App() {
                                             <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.memory} MB</td>
                                             <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.memory} MB</td>
                                             <td className="p-3 text-right text-gray-400">
-                                                -{((parseFloat(performanceMetrics.bplustree.memory) - parseFloat(performanceMetrics.btree.memory)) / parseFloat(performanceMetrics.btree.memory) * 100).toFixed(1)}%
+                                                {(Number(performanceMetrics.bplustree.memory) && Number(performanceMetrics.btree.memory))
+                                                    ? (((parseFloat(performanceMetrics.bplustree.memory) - parseFloat(performanceMetrics.btree.memory)) / parseFloat(performanceMetrics.btree.memory) * 100).toFixed(1))
+                                                    : '—'}%
                                             </td>
                                         </tr>
                                         <tr>
@@ -406,7 +393,9 @@ function App() {
                                             <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.build}s</td>
                                             <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.build}s</td>
                                             <td className="p-3 text-right text-gray-400">
-                                                -{((parseFloat(performanceMetrics.bplustree.build) - parseFloat(performanceMetrics.btree.build)) / parseFloat(performanceMetrics.btree.build) * 100).toFixed(1)}%
+                                                {(Number(performanceMetrics.bplustree.build) && Number(performanceMetrics.btree.build))
+                                                    ? (((parseFloat(performanceMetrics.bplustree.build) - parseFloat(performanceMetrics.btree.build)) / parseFloat(performanceMetrics.btree.build) * 100).toFixed(1))
+                                                    : '—'}%
                                             </td>
                                         </tr>
                                         </tbody>
@@ -415,114 +404,9 @@ function App() {
                             </div>
                         )}
 
-                        {performanceMetrics && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                                <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                    <h3 className="text-md font-bold text-yellow-400 mb-4">Performance Comparison</h3>
-                                    <ResponsiveContainer width="100%" height={250}>
-                                        <BarChart data={performanceChartData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                                            <XAxis dataKey="name" stroke="#a1a1aa" />
-                                            <YAxis stroke="#a1a1aa" />
-                                            <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #eab308' }} />
-                                            <Legend />
-                                            <Bar dataKey="B-Tree" fill="#71717a" />
-                                            <Bar dataKey="B+ Tree" fill="#eab308" />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-
-                                {chartData.type !== 'none' && (
-                                    <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                        <h3 className="text-md font-bold text-yellow-400 mb-4">
-                                            {chartData.type === 'price' && 'Price Trend'}
-                                            {chartData.type === 'distribution' && 'Records by Type'}
-                                            {chartData.type === 'symbols' && 'Top 5 Symbols Found'}
-                                        </h3>
-                                        <ResponsiveContainer width="100%" height={250}>
-                                            {chartData.type === 'price' ? (
-                                                <LineChart data={chartData.data}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                                                    <XAxis
-                                                        dataKey="name"
-                                                        stroke="#a1a1aa"
-                                                        angle={-45}
-                                                        textAnchor="end"
-                                                        height={80}
-                                                        fontSize={10}
-                                                    />
-                                                    <YAxis
-                                                        stroke="#a1a1aa"
-                                                        domain={chartData.yDomain}
-                                                        tickFormatter={(value) => `$${Math.round(value)}`}
-                                                        width={50}
-                                                    />
-                                                    <Tooltip
-                                                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #eab308' }}
-                                                        formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
-                                                        labelStyle={{ color: '#eab308' }}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey="price"
-                                                        stroke="#eab308"
-                                                        strokeWidth={1.5}
-                                                        dot={{ fill: '#eab308', strokeWidth: 0, r: 2 }}
-                                                        activeDot={{ r: 4, fill: '#eab308' }}
-                                                    />
-                                                </LineChart>
-                                            ) : chartData.type === 'symbols' ? (
-                                                <BarChart
-                                                    data={chartData.data.length > 0 ? chartData.data : [
-                                                        { name: 'TEST1', count: 5 },
-                                                        { name: 'TEST2', count: 3 }
-                                                    ]}
-                                                    margin={{ top: 5, right: 20, left: 10, bottom: 60 }}
-                                                >
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                                                    <XAxis
-                                                        dataKey="name"
-                                                        stroke="#a1a1aa"
-                                                        angle={-45}
-                                                        textAnchor="end"
-                                                        height={80}
-                                                        interval={0}
-                                                        tick={{ fontSize: 11, fill: '#ffffff' }}
-                                                    />
-                                                    <YAxis
-                                                        stroke="#a1a1aa"
-                                                        allowDecimals={false}
-                                                        domain={[(dataMin) => Math.floor(dataMin * 0.95), 'auto']}
-                                                    />
-                                                    <Tooltip
-                                                        contentStyle={{
-                                                            backgroundColor: '#18181b',
-                                                            border: '1px solid #eab308'
-                                                        }}
-                                                        cursor={{ fill: '#3f3f46', opacity: 0.3 }}
-                                                    />
-                                                    <Bar
-                                                        dataKey="count"
-                                                        fill="#eab308"
-                                                        radius={[4, 4, 0, 0]}
-                                                    />
-                                                </BarChart>
-                                            ) : (
-                                                <BarChart data={chartData.data}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                                                    <XAxis dataKey="name" stroke="#a1a1aa" />
-                                                    <YAxis stroke="#a1a1aa" />
-                                                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #eab308' }} />
-                                                    <Legend />
-                                                    <Bar dataKey="count" fill="#eab308" />
-                                                </BarChart>
-                                            )}
-                                        </ResponsiveContainer>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                            <PerformanceComparison data={perfData} />
+                        </div>
 
                     </div>
                 </div>
@@ -531,4 +415,10 @@ function App() {
     );
 }
 
-export default App;
+export default function App() {
+    return (
+        <div className="min-h-screen bg-black p-6">
+            <AppInner />
+        </div>
+    );
+}
