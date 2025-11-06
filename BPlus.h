@@ -7,23 +7,6 @@
 #include <vector>
 using namespace std;
 
-    // VAL STRUCT
-    struct MarketRecord {
-        string timestamp;
-        string name;
-        string symbol;
-        string type;
-        double price;
-        double high;
-        double low;
-        double volume;
-        MarketRecord(string timestamp,
-            string name, string symbol, double price,
-            double high, double low, double volume,
-            string type) : timestamp(timestamp),
-            name(name), symbol(symbol), price(price),
-            high(high), low(low), volume(volume), type(type) {}
-    };
 
     // NODE STRUCT
     struct Node {
@@ -136,7 +119,8 @@ public:
     }
 
     // RANGE QUERY - gives nodes between a certain index, O(logn) complexity
-    vector<MarketRecord*> rangeQuery(int low, int high, vector<MarketRecord*>& ret) {
+    vector<MarketRecord*> rangeQuery(int low, int high) {
+        vector<MarketRecord*>& ret;
         Node* node=root;
 
         //find leaf
