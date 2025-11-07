@@ -35,7 +35,6 @@ int timetoSeconds(const std::string& timestamp) {
     if (ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S")) {
         return static_cast<int>(std::mktime(&tm));
     }
-    // Try date-only fallback (YYYY-MM-DD)
     std::tm tm2 = {};
     std::stringstream ss2(timestamp + " 00:00:00");
     if (ss2 >> std::get_time(&tm2, "%Y-%m-%d %H:%M:%S")) {
@@ -72,7 +71,7 @@ static inline uint32_t nameKey32(const std::string& name) {
     return hash;
 }
 
-// ===== LIVE PROCESS MEMORY (RSS / Working Set) =====
+// ===== LIVE PROCESS MEMORY 
 static double getProcessMemoryMB() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX pmc;
@@ -81,12 +80,11 @@ static double getProcessMemoryMB() {
     }
     return 0.0;
 #else
-    // Non-Windows: return 0.0 or implement /proc/self/statm parsing if desired
     return 0.0;
 #endif
 }
 
-// ===== Data loading
+//  Data loading
 std::vector<MarketRecord> loadStockData(const std::string& filename, int maxRows) {
     std::vector<MarketRecord> records;
     std::ifstream file(filename);
@@ -146,7 +144,7 @@ std::vector<MarketRecord> loadCryptoData(const std::string& filename, int maxRow
     return records;
 }
 
-// ===== Perf test harness
+//  Perf test harness
 struct PerformanceMetrics {
     double buildTime{};
     double rangeQuery100{};
@@ -299,7 +297,7 @@ int main() {
     writePerfJSON(perfPath, tsBT, prBT, tsBP, prBP,
                   mem_tsBT_mb, mem_tsBP_mb, mem_prBT_mb, mem_prBP_mb);
 
-    // ===== Query loop (stdin JSON -> stdout JSON) =====
+    //  Query loop (stdin JSON -> stdout JSON) 
     std::string query_string;
     while (std::getline(std::cin, query_string)) {
         try {
@@ -337,7 +335,7 @@ int main() {
                     json j = json::object();
                     j["timestamp"] = r->timestamp;
                     j["name"]      = r->name;
-                    j["symbol"]    = r->symbol;  // stocks will be "", crypto will have symbol
+                    j["symbol"]    = r->symbol;  
                     j["price"]     = r->price;
                     j["high"]      = r->high;
                     j["low"]       = r->low;
