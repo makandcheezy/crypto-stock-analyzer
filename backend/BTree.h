@@ -181,4 +181,17 @@ class MyBTree {
             }
         }
     }
+    //read mem for ui
+private:
+    size_t countNodes(TreeNode* n) const {
+        if (!n) return 0;
+        size_t c = 1;
+        if (!n->leaf) {
+            for (int i = 0; i <= n->numKeys; ++i)
+                c += countNodes(n->children[i]);
+        }
+        return c;
+    }
+public:
+    size_t approxBytes() const { return countNodes(root) * sizeof(TreeNode); }
 };

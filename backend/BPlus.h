@@ -7,41 +7,40 @@
 #include <vector>
 using namespace std;
 
+// forward declare MarketRecord to avoid redefinition
+struct MarketRecord;
 
-    // NODE STRUCT
-    struct Node {
-        bool isLeaf;
-        static const int order = 5;
-        int keyCount;
-        int keys[order-1];
-        Node* children[order];
-        Node* next;
-        MarketRecord* data[order-1];
+// NODE STRUCT
+struct Node {
+    bool isLeaf;
+    static const int order = 5;
+    int keyCount;
+    int keys[order-1];
+    Node* children[order];
+    Node* next;
+    MarketRecord* data[order-1];
 
-        Node(bool leaf = false) : isLeaf(leaf), keyCount(0), next(nullptr) {
-            for (int i = 0; i < order-1; i++) {
-                keys[i] = 0;
-                data[i] = nullptr;
-            }
-            for (int i = 0; i < order; i++) {
-                children[i] = nullptr;
-            }
+    Node(bool leaf = false) : isLeaf(leaf), keyCount(0), next(nullptr) {
+        for (int i = 0; i < order-1; i++) {
+            keys[i] = 0;
+            data[i] = nullptr;
         }
-    };
+        for (int i = 0; i < order; i++) {
+            children[i] = nullptr;
+        }
+    }
+};
 
 // B+ TREE CLASS
 class BPlus {
 private:
-    // VARIABLES AND CONSTRUCTORS
     static const int order = 5;
     static const int maxKeys = order-1;
     static const int minKeys = maxKeys/2;
     Node* root = nullptr;
 
 public:
-    // FUNCTIONS
     BPlus() : root(nullptr) {}
-
 
     //scans tree to find the leaf node of the given node
     Node* findLeaf(Node* node, int key) {
@@ -59,7 +58,6 @@ public:
         return findLeaf(node->children[node->keyCount], key);
     }
 
-
     //split for leaves, maintains linkedlist
     Node* splitLeaf(Node* leaf) {
         int split = leaf->keyCount/2;
@@ -71,9 +69,9 @@ public:
             newLeaf->keys[i] = leaf->keys[i + split];
             newLeaf->data[i] = leaf->data[i + split];
         }
-        leaf->next = newLeaf;
-        newLeaf->next = leaf->next;
+
         leaf->keyCount = split;
+        leaf->next = newLeaf;
         return newLeaf;
     }
 
@@ -120,7 +118,7 @@ public:
 
     // RANGE QUERY - gives nodes between a certain index, O(logn) complexity
     vector<MarketRecord*> rangeQuery(int low, int high) {
-        vector<MarketRecord*>& ret;
+        vector<MarketRecord*> ret;
         Node* node=root;
 
         //find leaf
@@ -166,6 +164,8 @@ public:
             node = node->children[i];
         }
 
+        if (!node) return nullptr;
+
         for (int i = 0; i<node->keyCount; i++) {
             if (node->keys[i] == key) {
                 return node->data[i];
@@ -182,63 +182,88 @@ public:
             root->keyCount = 1;
             root->data[0] = record;
             return;
-        } else {
-            //new root
-            if (root->keyCount == maxKeys) {
-                Node* newRoot = new Node(false);
+        }
 
-                newRoot->children[0] = root;
+        if (root->keyCount == maxKeys) {
+            Node* newRoot = new Node(false);
+            newRoot->children[0] = root;
+
+            if (root->isLeaf) {
                 Node* newLeaf = splitLeaf(root);
                 newRoot->children[1] = newLeaf;
-                newRoot->keyCount = 1;
                 newRoot->keys[0] = newLeaf->keys[0];
-                root = newRoot;
-                insertHelper(root, key, record);
             } else {
-                //root is not full
-                insertHelper(root,key,record);
+                Node* newInternal = splitInternal(root);
+                newRoot->children[1] = newInternal;
+                newRoot->keys[0] = root->keys[root->keyCount];
             }
+
+            newRoot->keyCount = 1;
+            root = newRoot;
         }
+
+        insertHelper(root, key, record);
     }
 
     //recursive helper for insert function
-    void insertHelper(Node*node, int key, MarketRecord* record) {
+    void insertHelper(Node* node, int key, MarketRecord* record) {
+        if (node->isLeaf) {
+            int i = node->keyCount - 1;
+            while (i >= 0 && key < node->keys[i]) {
+                node->keys[i + 1] = node->keys[i];
+                node->data[i + 1] = node->data[i];
+                i--;
+            }
+            node->keys[i + 1] = key;
+            node->data[i + 1] = record;
+            node->keyCount++;
+        } else {
+            int j = findKeyIndex(node, key);
+            Node* child = node->children[j];
 
-if (node->isLeaf) {
-    int i = node->keyCount-1;
-    while (i >= 0 && key < node->keys[i]) {
-        node->keys[i + 1] = node->keys[i];
-        node->data[i+1] = node->data[i];
-        i--;
-    }
-    node->keys[i+1] = key;
-    node->data[i+1] = record;
-    node->keyCount = node->keyCount + 1;
-} else {
-    int j = findKeyIndex(node, key);
-    Node* child = node->children[j];
+            if (child->keyCount == maxKeys) {
+                Node* newChild;
+                int promoteKey;
 
-    //split if full
-    if (child->keyCount == maxKeys) {
-        Node* newChild = splitLeaf(child);
-        for (int k = node->keyCount; k > j; k--) {
-            node->keys[k] = node->keys[k-1];
-            node->children[k + 1] = node->children[k];
+                if (child->isLeaf) {
+                    newChild = splitLeaf(child);
+                    promoteKey = newChild->keys[0];
+                } else {
+                    newChild = splitInternal(child);
+                    promoteKey = child->keys[child->keyCount];
+                }
+
+                for (int k = node->keyCount; k > j; k--) {
+                    node->keys[k] = node->keys[k - 1];
+                    node->children[k + 1] = node->children[k];
+                }
+
+                node->keys[j] = promoteKey;
+                node->children[j + 1] = newChild;
+                node->keyCount++;
+
+                if (key >= promoteKey) {
+                    child = newChild;
+                }
+            }
+
+            insertHelper(child, key, record);
         }
-        node->keyCount = node->keyCount + 1;
-        node->keys[j] = newChild->keys[j];
-        node->children[j+1] = newChild;
-
-        if (key >= node->keys[j]) {
-            child=newChild;
+    }
+    // read mem for ui
+private:
+    size_t countNodes(Node* n) const {
+        if (!n) return 0;
+        size_t c = 1;
+        if (!n->isLeaf) {
+            for (int i = 0; i <= n->keyCount; ++i)
+                c += countNodes(n->children[i]);
         }
+        return c;
     }
-    insertHelper(child, key, record);
-}
-    }
+public:
+    size_t approxBytes() const { return countNodes(root) * sizeof(Node); }
 };
-
-
 
 
 #endif //BPLUSTREE_BPLUS_H

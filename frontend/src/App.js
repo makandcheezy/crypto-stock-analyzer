@@ -1,12 +1,28 @@
 // src/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis,
     CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import PerformanceComparison from './PerformanceComparison';
 
+const YELLOW = '#EAB308';
+const WHITE  = '#ffffff';
+
+// helpers
+const safePct = (a, b) => {
+    const A = Number(a), B = Number(b);
+    if (!Number.isFinite(A) || !Number.isFinite(B) || A <= 1e-6 || B <= 0) return '—';
+    return ((A / B - 1) * 100).toFixed(2);
+};
+const pctImprove = (btree, bplus) => {
+    const A = Number(btree), B = Number(bplus);
+    if (!Number.isFinite(A) || !Number.isFinite(B) || A <= 0) return '—';
+    return ((A / B - 1) * 100).toFixed(2);
+};
+
 function AppInner() {
+    // state
     const [queryType, setQueryType] = useState('ticker');
     const [tickerInput, setTickerInput] = useState('');
     const [startDate, setStartDate] = useState('2024-01-15');
@@ -21,6 +37,7 @@ function AppInner() {
     const [perfData, setPerfData] = useState(null);
     const [totalRecords, setTotalRecords] = useState(null);
 
+    // fetch perf snapshot
     const loadPerf = async () => {
         try {
             const r = await fetch(`http://127.0.0.1:8080/api/perf?ts=${Date.now()}`, { cache: 'no-store' });
@@ -38,9 +55,9 @@ function AppInner() {
             }
         }
     };
+    useEffect(() => { loadPerf(); }, []);
 
-    React.useEffect(() => { loadPerf(); }, []);
-
+    // run query
     const runQuery = async () => {
         setIsLoading(true);
 
@@ -58,7 +75,6 @@ function AppInner() {
             query.maxPrice = maxPrice === '' ? undefined : parseFloat(maxPrice);
         }
 
-        // client-side timer as a fallback if backend doesn't return metrics
         const t0 = performance.now();
         try {
             const res = await fetch(`http://127.0.0.1:8080/api/query?ts=${Date.now()}`, {
@@ -72,14 +88,11 @@ function AppInner() {
             setResults(rows);
             setTotalRecords(data?.size ?? null);
 
-            // 1) Prefer live metrics from backend if present
             const live = data?.metrics;
             const useLive = live && (live.btree || live.bplustree);
-
-            // 2) Otherwise use client-side measured query time
             const clientQuerySec = (performance.now() - t0) / 1000;
 
-            let btreeQuery = null, bplusQuery = null, btreeMem = null, bplusMem = null, btreeBuild = null, bplusBuild = null;
+            let btreeQuery = null, bplusQuery = null, btreeMem = null, bplusMem = null, btreeBuild = null, bplusBuild = null, rssMB = null;
 
             if (useLive) {
                 btreeQuery = Number(live?.btree?.querySec);
@@ -88,50 +101,40 @@ function AppInner() {
                 bplusMem   = Number(live?.bplustree?.memoryMB);
                 btreeBuild = Number(live?.btree?.buildSec);
                 bplusBuild = Number(live?.bplustree?.buildSec);
+                rssMB      = Number(live?.rssMB);
             } else {
-                // 3) Fall back to perfData file (static) if available
                 const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
                 const b  = (perfData?.[index]?.btree)     || {};
                 const bp = (perfData?.[index]?.bplustree) || {};
-
-                // use clientQuerySec for B-Tree query if we don't have live metrics
                 btreeQuery = Number.isFinite(Number(b.rangeQuery100)) ? Number(b.rangeQuery100) : clientQuerySec;
                 bplusQuery = Number(bp.rangeQuery100);
                 btreeMem   = Number(b.memory);
                 bplusMem   = Number(bp.memory);
                 btreeBuild = Number(b.buildTime);
                 bplusBuild = Number(bp.buildTime);
+                rssMB      = null;
             }
-
-            const improvement = (Number.isFinite(btreeQuery) && btreeQuery !== 0 && Number.isFinite(bplusQuery))
-                ? (((btreeQuery - bplusQuery) / btreeQuery) * 100)
-                : (Number.isFinite(btreeQuery) && !Number.isFinite(bplusQuery))
-                    ? 0 // if only btree is known, show 0% instead of stale 100%
-                    : NaN;
 
             setPerformanceMetrics({
                 btree: {
-                    query:  Number.isFinite(btreeQuery) ? btreeQuery.toFixed(4) : '—',
-                    memory: Number.isFinite(btreeMem)   ? btreeMem.toFixed(4)   : '—',
+                    query:  Number.isFinite(btreeQuery) ? btreeQuery.toFixed(6) : '—',
+                    memory: Number.isFinite(btreeMem)   ? btreeMem.toFixed(2)   : '—',
                     build:  Number.isFinite(btreeBuild) ? btreeBuild.toFixed(4) : '—'
                 },
                 bplustree: {
-                    query:  Number.isFinite(bplusQuery) ? bplusQuery.toFixed(4) : '—',
-                    memory: Number.isFinite(bplusMem)   ? bplusMem.toFixed(4)   : '—',
+                    query:  Number.isFinite(bplusQuery) ? bplusQuery.toFixed(6) : '—',
+                    memory: Number.isFinite(bplusMem)   ? bplusMem.toFixed(2)   : '—',
                     build:  Number.isFinite(bplusBuild) ? bplusBuild.toFixed(4) : '—'
                 },
-                improvement: Number.isFinite(improvement) ? improvement.toFixed(1) : '—',
+                rssMB: Number.isFinite(rssMB) ? rssMB.toFixed(2) : '—',
+                improvement: safePct(btreeQuery, bplusQuery),
+                memoryImprovement: pctImprove(btreeMem, bplusMem),
+                buildImprovement: pctImprove(btreeBuild, bplusBuild),
                 recordsFound: rows.length
             });
-            setTimeout(() => {
-                fetch('http://127.0.0.1:8080/api/perf?ts=' + Date.now(), { cache: 'no-store' })
-                    .then(r => (r.ok ? r.json() : Promise.reject('perf fetch not ok')))
-                    .then(data => setPerfData(data))
-                    .catch(err => console.log('perf refresh error:', err));
-            }, 800);
 
-            // pull fresh perf blob after each query (no cache)
-            loadPerf();
+            setTimeout(() => loadPerf(), 800);
+
         } catch (err) {
             console.log('Error:', err);
         } finally {
@@ -139,27 +142,14 @@ function AppInner() {
         }
     };
 
-    const performanceChartData = performanceMetrics ? [
-        {
-            name: 'Query Time',
-            'B-Tree':  parseFloat(performanceMetrics.btree.query)     * 1000 || 0,
-            'B+ Tree': parseFloat(performanceMetrics.bplustree.query) * 1000 || 0
-        },
-        {
-            name: 'Build Time',
-            'B-Tree':  parseFloat(performanceMetrics.btree.build)     || 0,
-            'B+ Tree': parseFloat(performanceMetrics.bplustree.build) || 0
-        },
-    ] : [];
-
+    // chart data
     const getChartData = () => {
         if (results.length === 0) return { type: 'none', data: [] };
-        const uniqueSymbols = [...new Set(results.map(r => r.symbol))];
 
-        if (queryType === 'ticker' && uniqueSymbols.length === 1) {
+        if (queryType === 'ticker') {
             const validResults = results
                 .filter(r => r.price && !isNaN(r.price) && r.price > 0)
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
             if (validResults.length === 0) return { type: 'none', data: [] };
 
             const dateGroups = {};
@@ -184,11 +174,15 @@ function AppInner() {
             const yMax = Math.ceil(maxPrice + pad);
 
             return { type: 'price', data: chartPoints, yDomain: [yMin, yMax] };
-        } else if (queryType === 'dateRange') {
+        }
+
+        if (queryType === 'dateRange') {
             const stockCount = results.filter(r => r.type === 'STOCK').length;
             const cryptoCount = results.filter(r => r.type === 'CRYPTO').length;
             return { type: 'distribution', data: [{ name: 'Stocks', count: stockCount }, { name: 'Crypto', count: cryptoCount }] };
-        } else if (queryType === 'priceRange') {
+        }
+
+        if (queryType === 'priceRange') {
             const symbolCounts = {};
             results.forEach(r => { if (r.symbol) symbolCounts[r.symbol] = (symbolCounts[r.symbol] || 0) + 1; });
             const topSymbols = Object.entries(symbolCounts)
@@ -197,18 +191,45 @@ function AppInner() {
                 .map(([symbol, count]) => ({ name: symbol, count: parseInt(count, 10) }));
             return { type: 'symbols', data: topSymbols };
         }
+
         return { type: 'none', data: [] };
     };
 
     const chartData = getChartData();
 
+    // visual datasets
+    const queryChartData = performanceMetrics ? [
+        {
+            name: 'Query Time (ms)',
+            'B-Tree': (parseFloat(performanceMetrics.btree.query) || 0) * 1000,
+            'B+ Tree': (parseFloat(performanceMetrics.bplustree.query) || 0) * 1000
+        }
+    ] : [];
+
+    const buildChartData = performanceMetrics ? [
+        {
+            name: 'Build Time (s)',
+            'B-Tree': parseFloat(performanceMetrics.btree.build) || 0,
+            'B+ Tree': parseFloat(performanceMetrics.bplustree.build) || 0
+        }
+    ] : [];
+
+    const memChartData = performanceMetrics ? [
+        {
+            name: 'Tree Memory (MB)',
+            'B-Tree': parseFloat(performanceMetrics.btree.memory) || 0,
+            'B+ Tree': parseFloat(performanceMetrics.bplustree.memory) || 0
+        }
+    ] : [];
+
+    // render
     return (
         <div className="min-h-screen bg-black p-6" style={{ fontFamily: "'Space Grotesk', 'Inter', sans-serif" }}>
             <div className="max-w-7xl mx-auto">
                 <div className="bg-zinc-900 rounded-lg shadow-lg p-6 mb-6 border border-yellow-500/30">
                     <h1 className="text-3xl font-bold text-yellow-400 mb-2 tracking-tight">Crypto & Stock Market Data Analyzer</h1>
                     <div className="text-sm text-gray-400">
-                        <div><span className="text-gray-500">Total Records:</span> <span className="font-semibold text-white">{totalRecords}</span></div>
+                        <div><span className="text-gray-500">Total Records:</span> <span className="font-semibold text-white">{totalRecords?.toLocaleString() || '—'}</span></div>
                     </div>
                 </div>
 
@@ -327,7 +348,6 @@ function AppInner() {
                                             <th className="p-2 text-left font-semibold">Name</th>
                                             <th className="p-2 text-left font-semibold">Symbol</th>
                                             <th className="p-2 text-right font-semibold">Price</th>
-                                            <th className="p-2 text-right font-semibold">Volume</th>
                                             <th className="p-2 text-center font-semibold">Type</th>
                                         </tr>
                                         </thead>
@@ -336,12 +356,9 @@ function AppInner() {
                                             <tr key={idx} className="border-b border-yellow-500/10 hover:bg-zinc-800/50">
                                                 <td className="p-2">{item.timestamp}</td>
                                                 <td className="p-2 text-white">{item.name}</td>
-                                                <td className="p-2 font-mono text-yellow-400">{item.symbol}</td>
+                                                <td className="p-2 font-mono text-yellow-400">{item.symbol || '—'}</td>
                                                 <td className="p-2 text-right font-mono text-white">
                                                     {Number.isFinite(Number(item.price)) ? `$${Number(item.price).toLocaleString()}` : '—'}
-                                                </td>
-                                                <td className="p-2 text-right">
-                                                    {Number.isFinite(Number(item.volume)) ? `${(Number(item.volume) / 1_000_000).toFixed(1)}M` : '—'}
                                                 </td>
                                                 <td className="p-2 text-center">
                             <span className={`px-2 py-1 rounded text-xs font-semibold ${item.type === 'CRYPTO'
@@ -358,55 +375,189 @@ function AppInner() {
                             </div>
                         )}
 
-                        {performanceMetrics && (
+                        {/* ticker price trend directly under results */}
+                        {chartData.type === 'price' && (
                             <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                <h2 className="text-lg font-bold text-yellow-400 mb-4">Performance Comparison</h2>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                        <tr className="text-gray-300 border-b border-yellow-500/30">
-                                            <th className="p-3 text-left font-semibold">Metric</th>
-                                            <th className="p-3 text-right font-semibold">B-Tree</th>
-                                            <th className="p-3 text-right font-semibold">B+ Tree</th>
-                                            <th className="p-3 text-right font-semibold">Improvement</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody className="text-gray-400">
-                                        <tr className="border-b border-yellow-500/10">
-                                            <td className="p-3 text-white">Query Time</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.query}s</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.query}s</td>
-                                            <td className="p-3 text-right font-semibold text-yellow-400">{performanceMetrics.improvement}%</td>
-                                        </tr>
-                                        <tr className="border-b border-yellow-500/10">
-                                            <td className="p-3 text-white">Memory Usage</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.memory} MB</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.memory} MB</td>
-                                            <td className="p-3 text-right text-gray-400">
-                                                {(Number(performanceMetrics.bplustree.memory) && Number(performanceMetrics.btree.memory))
-                                                    ? (((parseFloat(performanceMetrics.bplustree.memory) - parseFloat(performanceMetrics.btree.memory)) / parseFloat(performanceMetrics.btree.memory) * 100).toFixed(1))
-                                                    : '—'}%
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td className="p-3 text-white">Build Time</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.build}s</td>
-                                            <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.build}s</td>
-                                            <td className="p-3 text-right text-gray-400">
-                                                {(Number(performanceMetrics.bplustree.build) && Number(performanceMetrics.btree.build))
-                                                    ? (((parseFloat(performanceMetrics.bplustree.build) - parseFloat(performanceMetrics.btree.build)) / parseFloat(performanceMetrics.btree.build) * 100).toFixed(1))
-                                                    : '—'}%
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <h2 className="text-lg font-bold text-yellow-400 mb-4">Price Trend (Averaged by Day)</h2>
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <LineChart data={chartData.data}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis
+                                            dataKey="name"
+                                            stroke="#9CA3AF"
+                                            tickFormatter={(d) => {
+                                                const [y,m,day] = String(d).split('-');
+                                                return `${m}/${day}`;
+                                            }}
+                                            interval="preserveStartEnd"
+                                            tickCount={6}
+                                        />
+                                        <YAxis domain={chartData.yDomain} stroke="#9CA3AF" />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }}
+                                            labelStyle={{ color: '#EAB308' }}
+                                            formatter={(v) => `$${Number(v).toFixed(2)}`}
+                                        />
+                                        <Legend />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="price"
+                                            dot={{ r: 2 }}
+                                            activeDot={{ r: 4 }}
+                                            strokeWidth={2}
+                                            stroke={YELLOW}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
                             </div>
+                        )}
+
+                        {performanceMetrics && (
+                            <>
+                                <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Performance (Live)</h2>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                            <tr className="text-gray-300 border-b border-yellow-500/30">
+                                                <th className="p-3 text-left font-semibold">Metric</th>
+                                                <th className="p-3 text-right font-semibold">B-Tree</th>
+                                                <th className="p-3 text-right font-semibold">B+ Tree</th>
+                                                <th className="p-3 text-right font-semibold">Improvement</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody className="text-gray-400">
+                                            <tr className="border-b border-yellow-500/10">
+                                                <td className="p-3 text-white">Query Time</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.query}s</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.query}s</td>
+                                                <td className="p-3 text-right font-mono text-yellow-400">{performanceMetrics.improvement}%</td>
+                                            </tr>
+                                            <tr className="border-b border-yellow-500/10">
+                                                <td className="p-3 text-white">Tree Memory (approx)</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.memory} MB</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.memory} MB</td>
+                                                <td className="p-3 text-right font-mono text-yellow-400">{performanceMetrics.memoryImprovement}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="p-3 text-white">Build Time</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.build}s</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.build}s</td>
+                                                <td className="p-3 text-right font-mono text-yellow-400">{performanceMetrics.buildImprovement}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="p-3 text-white">Process Memory (RSS)</td>
+                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.rssMB} MB</td>
+                                                <td className="p-3 text-right font-mono text-white">—</td>
+                                                <td className="p-3 text-right text-gray-400">live</td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* query time chart */}
+                                <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Query Time (milliseconds)</h2>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={queryChartData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis dataKey="name" stroke="#9CA3AF" />
+                                            <YAxis stroke="#9CA3AF" />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }}
+                                                labelStyle={{ color: '#EAB308' }}
+                                                formatter={(v) => Number(v).toFixed(3) + ' ms'}
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="B-Tree" fill={YELLOW} />
+                                            <Bar dataKey="B+ Tree" fill={WHITE} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* build time chart */}
+                                <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Build Time (seconds)</h2>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={buildChartData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis dataKey="name" stroke="#9CA3AF" />
+                                            <YAxis stroke="#9CA3AF" />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }}
+                                                labelStyle={{ color: '#EAB308' }}
+                                                formatter={(v) => Number(v).toFixed(6) + ' s'}
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="B-Tree" fill={YELLOW} />
+                                            <Bar dataKey="B+ Tree" fill={WHITE} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* memory chart */}
+                                <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Tree Memory (MB)</h2>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={memChartData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis dataKey="name" stroke="#9CA3AF" />
+                                            <YAxis stroke="#9CA3AF" />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }}
+                                                labelStyle={{ color: '#EAB308' }}
+                                                formatter={(v) => Number(v).toFixed(2) + ' MB'}
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="B-Tree" fill={YELLOW} />
+                                            <Bar dataKey="B+ Tree" fill={WHITE} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </>
                         )}
 
                         <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
                             <PerformanceComparison data={perfData} />
+                            {perfData?.updatedAt && (
+                                <div className="text-xs text-gray-500 mt-2">
+                                    Snapshot last updated: <span className="text-gray-300">{perfData.updatedAt}</span>
+                                </div>
+                            )}
                         </div>
+
+                        {chartData.type === 'distribution' && (
+                            <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                <h2 className="text-lg font-bold text-yellow-400 mb-4">Record Distribution</h2>
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <BarChart data={chartData.data}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="name" stroke="#9CA3AF" />
+                                        <YAxis stroke="#9CA3AF" />
+                                        <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }} labelStyle={{ color: '#EAB308' }} />
+                                        <Legend />
+                                        <Bar dataKey="count" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+
+                        {chartData.type === 'symbols' && (
+                            <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
+                                <h2 className="text-lg font-bold text-yellow-400 mb-4">Top Symbols in Range</h2>
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <BarChart data={chartData.data}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="name" stroke="#9CA3AF" />
+                                        <YAxis stroke="#9CA3AF" />
+                                        <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }} labelStyle={{ color: '#EAB308' }} />
+                                        <Legend />
+                                        <Bar dataKey="count" fill="#ffffff" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
 
                     </div>
                 </div>
