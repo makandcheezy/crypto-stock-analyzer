@@ -1,6 +1,5 @@
 import React from 'react';
 
-// format helpers
 const num = (x, d = 6) => (Number.isFinite(Number(x)) ? Number(x).toFixed(d) : '—');
 const pct = (x, d = 2) => {
     if (!Number.isFinite(x)) return '—';
@@ -8,12 +7,11 @@ const pct = (x, d = 2) => {
     return `${x.toFixed(d)}%`;
 };
 
-// Positive means B+ is better (faster)
 const improvement = (btree, bplus) => {
     const a = Number(btree);
     const b = Number(bplus);
     if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 1e-6 || b <= 0) return NaN;
-    return (a / b - 1) * 100; // e.g., 20% means B+ is 20% faster than B-Tree
+    return (a / b - 1) * 100; 
 };
 
 export default function PerformanceComparison({ data }) {
