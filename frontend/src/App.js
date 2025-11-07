@@ -1,4 +1,3 @@
-// src/App.js
 import React, { useState, useEffect } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis,
@@ -375,7 +374,7 @@ function AppInner() {
                             </div>
                         )}
 
-                        {/* ticker price trend directly under results */}
+                        // ticker price trend
                         {chartData.type === 'price' && (
                             <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
                                 <h2 className="text-lg font-bold text-yellow-400 mb-4">Price Trend (Averaged by Day)</h2>
