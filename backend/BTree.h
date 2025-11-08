@@ -71,7 +71,7 @@ class MyBTree {
             }
         }
     }
-    void insertHelp(TreeNode* node, int key, MarketRecord* data) { //
+    void insertHelp(TreeNode* node, int key, MarketRecord* data) { 
         if(node->leaf) { 
             int i = findKeyIndex(node, key); 
             for(int j = node->numKeys-1; j >= i; j--) { 

@@ -28,8 +28,6 @@ function AppInner() {
     const [endDate, setEndDate] = useState('2024-01-17');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
-    const [indexType, setIndexType] = useState('timestamp');
-
     const [results, setResults] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [performanceMetrics, setPerformanceMetrics] = useState(null);
@@ -102,7 +100,12 @@ function AppInner() {
                 bplusBuild = Number(live?.bplustree?.buildSec);
                 rssMB      = Number(live?.rssMB);
             } else {
-                const index = indexType === 'timestamp' ? 'timestamp_index' : 'price_index';
+                let index = 'timestamp_index';
+                if (queryType === 'priceRange') {
+                    index = 'price_index';
+                } else if (queryType === 'dateRange') {
+                    index = 'timestamp_index';
+                }
                 const b  = (perfData?.[index]?.btree)     || {};
                 const bp = (perfData?.[index]?.bplustree) || {};
                 btreeQuery = Number.isFinite(Number(b.rangeQuery100)) ? Number(b.rangeQuery100) : clientQuerySec;
@@ -311,19 +314,6 @@ function AppInner() {
                                         </div>
                                     </>
                                 )}
-
-                                <div>
-                                    <label className="block text-gray-300 mb-2 text-sm font-medium">Index Type</label>
-                                    <select
-                                        value={indexType}
-                                        onChange={(e) => setIndexType(e.target.value)}
-                                        className="w-full bg-black text-white border border-yellow-500/50 rounded-lg p-2 text-sm focus:outline-none focus:border-yellow-500"
-                                    >
-                                        <option value="timestamp">Timestamp Index</option>
-                                        <option value="price">Price Index</option>
-                                    </select>
-                                </div>
-
                                 <button
                                     onClick={runQuery}
                                     disabled={isLoading}

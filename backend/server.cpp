@@ -26,7 +26,6 @@ int max_results = 500;
 using json = nlohmann::json;
 
 
-// ===== Utils
 static std::string to_upper(std::string s){ for (auto &c: s) c=(char)std::toupper((unsigned char)c); return s; }
 
 int timetoSeconds(const std::string& timestamp) {
@@ -59,7 +58,7 @@ std::vector<std::string> splitCSVLine(const std::string& line) {
 }
 
 // 32-bit name key (FNV-1a over uppercased name)
-static inline uint32_t nameKey32(const std::string& name) {
+static uint32_t nameKey32(const std::string& name) {
     const uint32_t FNV_OFFSET = 2166136261u;
     const uint32_t FNV_PRIME  = 16777619u;
     uint32_t hash = FNV_OFFSET;
@@ -71,7 +70,7 @@ static inline uint32_t nameKey32(const std::string& name) {
     return hash;
 }
 
-// ===== LIVE PROCESS MEMORY 
+// Live process memory 
 static double getProcessMemoryMB() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX pmc;
@@ -84,7 +83,7 @@ static double getProcessMemoryMB() {
 #endif
 }
 
-//  Data loading
+// Data loading
 std::vector<MarketRecord> loadStockData(const std::string& filename, int maxRows) {
     std::vector<MarketRecord> records;
     std::ifstream file(filename);
@@ -144,7 +143,7 @@ std::vector<MarketRecord> loadCryptoData(const std::string& filename, int maxRow
     return records;
 }
 
-//  Perf test harness
+// Performance test helper
 struct PerformanceMetrics {
     double buildTime{};
     double rangeQuery100{};
@@ -297,7 +296,7 @@ int main() {
     writePerfJSON(perfPath, tsBT, prBT, tsBP, prBP,
                   mem_tsBT_mb, mem_tsBP_mb, mem_prBT_mb, mem_prBP_mb);
 
-    //  Query loop (stdin JSON -> stdout JSON) 
+    // Query loop (stdin JSON -> stdout JSON) 
     std::string query_string;
     while (std::getline(std::cin, query_string)) {
         try {
