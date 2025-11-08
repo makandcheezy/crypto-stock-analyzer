@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis,
-    CartesianGrid, Tooltip, Legend, ResponsiveContainer
+    CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Brush
 } from 'recharts';
 import PerformanceComparison from './PerformanceComparison';
 
@@ -41,13 +41,15 @@ function AppInner() {
             const ct = r.headers.get('content-type') || '';
             if (!r.ok || !ct.includes('application/json')) throw new Error('perf not json');
             setPerfData(await r.json());
-        } catch {
+        } catch (e) {
+            console.log('Primary perf fetch failed:', e.message);
             try {
                 const r2 = await fetch(`/performance_results.json?ts=${Date.now()}`, { cache: 'no-store' });
                 const ct2 = r2.headers.get('content-type') || '';
                 if (!r2.ok || !ct2.includes('application/json')) throw new Error('fallback not json');
                 setPerfData(await r2.json());
-            } catch {
+            } catch (e2) {
+                console.log('Fallback perf fetch failed:', e2.message);
                 setPerfData(null);
             }
         }
@@ -89,11 +91,12 @@ function AppInner() {
             const useLive = live && (live.btree || live.bplustree);
             const clientQuerySec = (performance.now() - t0) / 1000;
 
-            let btreeQuery = null, bplusQuery = null, btreeMem = null, bplusMem = null, btreeBuild = null, bplusBuild = null, rssMB = null;
+            let btreeQuery, bplusQuery, scanQuery, btreeMem, bplusMem, btreeBuild, bplusBuild, rssMB;
 
             if (useLive) {
                 btreeQuery = Number(live?.btree?.querySec);
                 bplusQuery = Number(live?.bplustree?.querySec);
+                scanQuery = Number(live?.scan?.querySec);
                 btreeMem   = Number(live?.btree?.memoryMB);
                 bplusMem   = Number(live?.bplustree?.memoryMB);
                 btreeBuild = Number(live?.btree?.buildSec);
@@ -110,11 +113,12 @@ function AppInner() {
                 const bp = (perfData?.[index]?.bplustree) || {};
                 btreeQuery = Number.isFinite(Number(b.rangeQuery100)) ? Number(b.rangeQuery100) : clientQuerySec;
                 bplusQuery = Number(bp.rangeQuery100);
+                scanQuery = undefined;
                 btreeMem   = Number(b.memory);
                 bplusMem   = Number(bp.memory);
                 btreeBuild = Number(b.buildTime);
                 bplusBuild = Number(bp.buildTime);
-                rssMB      = null;
+                rssMB      = undefined;
             }
 
             setPerformanceMetrics({
@@ -128,6 +132,9 @@ function AppInner() {
                     memory: Number.isFinite(bplusMem)   ? bplusMem.toFixed(2)   : '—',
                     build:  Number.isFinite(bplusBuild) ? bplusBuild.toFixed(4) : '—'
                 },
+                scan: {
+                    query: Number.isFinite(scanQuery) ? (scanQuery * 1000).toFixed(3) : '—'
+                },
                 rssMB: Number.isFinite(rssMB) ? rssMB.toFixed(2) : '—',
                 improvement: safePct(btreeQuery, bplusQuery),
                 memoryImprovement: pctImprove(btreeMem, bplusMem),
@@ -138,7 +145,7 @@ function AppInner() {
             setTimeout(() => loadPerf(), 800);
 
         } catch (err) {
-            console.log('Error:', err);
+            console.log('Query error:', err);
         } finally {
             setIsLoading(false);
         }
@@ -162,10 +169,14 @@ function AppInner() {
                 dateGroups[date].count++;
             });
 
-            const chartPoints = Object.entries(dateGroups).map(([date, d]) => ({
-                name: date,
-                price: parseFloat((d.prices.reduce((a, b) => a + b, 0) / d.count).toFixed(2))
-            }));
+            const chartPoints = Object.entries(dateGroups).map(([date, d]) => {
+                const ts = new Date(date + 'T00:00:00Z').getTime();
+                return {
+                    t: ts,
+                    name: date,
+                    price: parseFloat((d.prices.reduce((a, b) => a + b, 0) / d.count).toFixed(2))
+                };
+            }).sort((a, b) => a.t - b.t);
 
             const prices = chartPoints.map(p => p.price);
             const minPrice = Math.min(...prices);
@@ -174,8 +185,9 @@ function AppInner() {
             const pad = range > 0 ? range * 0.1 : maxPrice * 0.05;
             const yMin = Math.max(0, Math.floor(minPrice - pad));
             const yMax = Math.ceil(maxPrice + pad);
+            const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
 
-            return { type: 'price', data: chartPoints, yDomain: [yMin, yMax] };
+            return { type: 'price', data: chartPoints, yDomain: [yMin, yMax], stats: { min: minPrice, max: maxPrice, avg } };
         }
 
         if (queryType === 'dateRange') {
@@ -364,7 +376,7 @@ function AppInner() {
                             </div>
                         )}
 
-                        // ticker price trend
+                        {/* ticker price trend */}
                         {chartData.type === 'price' && (
                             <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
                                 <h2 className="text-lg font-bold text-yellow-400 mb-4">Price Trend (Averaged by Day)</h2>
@@ -372,22 +384,45 @@ function AppInner() {
                                     <LineChart data={chartData.data}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                         <XAxis
-                                            dataKey="name"
+                                            dataKey="t"
+                                            type="number"
+                                            domain={['dataMin', 'dataMax']}
                                             stroke="#9CA3AF"
-                                            tickFormatter={(d) => {
-                                                const [y,m,day] = String(d).split('-');
-                                                return `${m}/${day}`;
+                                            tickFormatter={(ts) => {
+                                                const d = new Date(ts);
+                                                const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+                                                const dd = String(d.getUTCDate()).padStart(2, '0');
+                                                return `${mm}/${dd}`;
                                             }}
-                                            interval="preserveStartEnd"
-                                            tickCount={6}
+                                            allowDuplicatedCategory={false}
+                                            minTickGap={20}
+                                            tickCount={Math.min(6, chartData.data.length)}
                                         />
-                                        <YAxis domain={chartData.yDomain} stroke="#9CA3AF" />
+                                        <YAxis
+                                            domain={chartData.yDomain}
+                                            stroke="#9CA3AF"
+                                            tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
+                                        />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }}
                                             labelStyle={{ color: '#EAB308' }}
                                             formatter={(v) => `$${Number(v).toFixed(2)}`}
+                                            labelFormatter={(ts) => {
+                                                const d = new Date(ts);
+                                                const yyyy = d.getUTCFullYear();
+                                                const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+                                                const dd = String(d.getUTCDate()).padStart(2, '0');
+                                                return `${mm}/${dd}/${yyyy}`;
+                                            }}
                                         />
                                         <Legend />
+                                        {chartData.stats && (
+                                            <>
+                                                <ReferenceLine y={chartData.stats.min} stroke="#64748B" strokeDasharray="4 4" />
+                                                <ReferenceLine y={chartData.stats.avg} stroke="#94A3B8" strokeDasharray="2 6" />
+                                                <ReferenceLine y={chartData.stats.max} stroke="#64748B" strokeDasharray="4 4" />
+                                            </>
+                                        )}
                                         <Line
                                             type="monotone"
                                             dataKey="price"
@@ -396,6 +431,7 @@ function AppInner() {
                                             strokeWidth={2}
                                             stroke={YELLOW}
                                         />
+                                        <Brush dataKey="t" height={18} stroke={YELLOW} travellerWidth={8} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
@@ -428,17 +464,25 @@ function AppInner() {
                                                 <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.memory} MB</td>
                                                 <td className="p-3 text-right font-mono text-yellow-400">{performanceMetrics.memoryImprovement}%</td>
                                             </tr>
-                                            <tr>
+                                            <tr className="border-b border-yellow-500/10">
                                                 <td className="p-3 text-white">Build Time</td>
                                                 <td className="p-3 text-right font-mono text-white">{performanceMetrics.btree.build}s</td>
                                                 <td className="p-3 text-right font-mono text-white">{performanceMetrics.bplustree.build}s</td>
                                                 <td className="p-3 text-right font-mono text-yellow-400">{performanceMetrics.buildImprovement}%</td>
                                             </tr>
-                                            <tr>
+                                            <tr className="border-t-2 border-yellow-500/20">
                                                 <td className="p-3 text-white">Process Memory (RSS)</td>
-                                                <td className="p-3 text-right font-mono text-white">{performanceMetrics.rssMB} MB</td>
-                                                <td className="p-3 text-right font-mono text-white">—</td>
-                                                <td className="p-3 text-right text-gray-400">live</td>
+                                                <td className="p-3 text-center font-mono text-gray-300" colSpan="2">
+                                                    {performanceMetrics.rssMB} MB
+                                                </td>
+                                                <td className="p-3 text-right text-gray-500 text-xs">total</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="p-3 text-white">Sequential Scan</td>
+                                                <td className="p-3 text-center font-mono text-gray-300" colSpan="2">
+                                                    {performanceMetrics.scan?.query || '—'} ms
+                                                </td>
+                                                <td className="p-3 text-right text-gray-500 text-xs">no index</td>
                                             </tr>
                                             </tbody>
                                         </table>
@@ -447,7 +491,7 @@ function AppInner() {
 
                                 {/* query time chart */}
                                 <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Query Time (milliseconds)</h2>
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Query Time (milliseconds)</h2>
                                     <ResponsiveContainer width="100%" height={220}>
                                         <BarChart data={queryChartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -467,7 +511,7 @@ function AppInner() {
 
                                 {/* build time chart */}
                                 <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Build Time (seconds)</h2>
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Build Time (seconds)</h2>
                                     <ResponsiveContainer width="100%" height={220}>
                                         <BarChart data={buildChartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -487,7 +531,7 @@ function AppInner() {
 
                                 {/* memory chart */}
                                 <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-yellow-500/30">
-                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Visual: Tree Memory (MB)</h2>
+                                    <h2 className="text-lg font-bold text-yellow-400 mb-4">Tree Memory (MB)</h2>
                                     <ResponsiveContainer width="100%" height={220}>
                                         <BarChart data={memChartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -526,7 +570,7 @@ function AppInner() {
                                         <YAxis stroke="#9CA3AF" />
                                         <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #EAB308' }} labelStyle={{ color: '#EAB308' }} />
                                         <Legend />
-                                        <Bar dataKey="count" />
+                                        <Bar dataKey="count" fill={YELLOW} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

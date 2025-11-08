@@ -25,6 +25,19 @@ using MyBPlusTree = BPlus;
 int max_results = 500;
 using json = nlohmann::json;
 
+// 32-bit name key (FNV-1a over uppercased name)
+static uint32_t nameKey32(const std::string& name) {
+    const uint32_t FNV_OFFSET = 2166136261u;
+    const uint32_t FNV_PRIME  = 16777619u;
+    uint32_t hash = FNV_OFFSET;
+    for (unsigned char ch : name) {
+        unsigned char up = (unsigned char)std::toupper(ch);
+        hash ^= up;
+        hash *= FNV_PRIME;
+    }
+    return hash;
+}
+
 
 static std::string to_upper(std::string s){ for (auto &c: s) c=(char)std::toupper((unsigned char)c); return s; }
 
@@ -43,6 +56,49 @@ int timetoSeconds(const std::string& timestamp) {
 }
 int priceToInt(double price) { return static_cast<int>(price * 100); }
 
+// Sequential scan helpers
+static double scanTickerSec(const std::vector<MarketRecord*>& recs, const std::string& qUpper) {
+    auto s = std::chrono::high_resolution_clock::now();
+    uint32_t key = nameKey32(qUpper);
+    size_t seen = 0;
+    for (auto* p : recs) {
+        if (!p) continue;
+        if (nameKey32(to_upper(p->name)) == key) {
+            if (++seen >= (size_t)max_results) break;
+        }
+    }
+    auto e = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double>(e - s).count();
+}
+
+static double scanDateRangeSec(const std::vector<MarketRecord*>& recs, int lo, int hi) {
+    auto s = std::chrono::high_resolution_clock::now();
+    size_t seen = 0;
+    for (auto* p : recs) {
+        if (!p) continue;
+        int t = timetoSeconds(p->timestamp);
+        if (t >= lo && t <= hi) {
+            if (++seen >= (size_t)max_results) break;
+        }
+    }
+    auto e = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double>(e - s).count();
+}
+
+static double scanPriceRangeSec(const std::vector<MarketRecord*>& recs, int lo, int hi) {
+    auto s = std::chrono::high_resolution_clock::now();
+    size_t seen = 0;
+    for (auto* p : recs) {
+        if (!p) continue;
+        int v = priceToInt(p->price);
+        if (v >= lo && v <= hi) {
+            if (++seen >= (size_t)max_results) break;
+        }
+    }
+    auto e = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double>(e - s).count();
+}
+
 std::vector<std::string> splitCSVLine(const std::string& line) {
     std::vector<std::string> result;
     std::stringstream ss(line);
@@ -57,20 +113,7 @@ std::vector<std::string> splitCSVLine(const std::string& line) {
     return result;
 }
 
-// 32-bit name key (FNV-1a over uppercased name)
-static uint32_t nameKey32(const std::string& name) {
-    const uint32_t FNV_OFFSET = 2166136261u;
-    const uint32_t FNV_PRIME  = 16777619u;
-    uint32_t hash = FNV_OFFSET;
-    for (unsigned char ch : name) {
-        unsigned char up = (unsigned char)std::toupper(ch);
-        hash ^= up;
-        hash *= FNV_PRIME;
-    }
-    return hash;
-}
-
-// Live process memory 
+// Live process memory
 static double getProcessMemoryMB() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX pmc;
@@ -296,7 +339,7 @@ int main() {
     writePerfJSON(perfPath, tsBT, prBT, tsBP, prBP,
                   mem_tsBT_mb, mem_tsBP_mb, mem_prBT_mb, mem_prBP_mb);
 
-    // Query loop (stdin JSON -> stdout JSON) 
+    // Query loop (stdin JSON -> stdout JSON)
     std::string query_string;
     while (std::getline(std::cin, query_string)) {
         try {
@@ -304,7 +347,7 @@ int main() {
             std::string query_type = query.value("queryType", "");
             json results = json::array();
 
-            double btreeQuerySec = 0.0, bplusQuerySec = 0.0;
+            double btreeQuerySec = 0.0, bplusQuerySec = 0.0, scanQuerySec = 0.0;
             double btreeMemMB = 0.0,  bplusMemMB  = 0.0;
 
             if (query_type == "ticker") {
@@ -325,6 +368,8 @@ int main() {
                 auto qEndBP = std::chrono::high_resolution_clock::now();
                 bplusQuerySec = std::chrono::duration<double>(qEndBP - qStartBP).count();
 
+                scanQuerySec = scanTickerSec(records, q);
+
                 btreeMemMB = toMB(nameBTree.approxBytes());
                 bplusMemMB = toMB(nameBPlus.approxBytes());
 
@@ -334,7 +379,7 @@ int main() {
                     json j = json::object();
                     j["timestamp"] = r->timestamp;
                     j["name"]      = r->name;
-                    j["symbol"]    = r->symbol;  
+                    j["symbol"]    = r->symbol;
                     j["price"]     = r->price;
                     j["high"]      = r->high;
                     j["low"]       = r->low;
@@ -358,6 +403,8 @@ int main() {
                 auto results_range_bp = timestampBPlus.rangeQuery(lo, hi);
                 auto qEndBP = std::chrono::high_resolution_clock::now();
                 bplusQuerySec = std::chrono::duration<double>(qEndBP - qStartBP).count();
+
+                scanQuerySec = scanDateRangeSec(records, lo, hi);
 
                 btreeMemMB = toMB(timestampBTree.approxBytes());
                 bplusMemMB = toMB(timestampBPlus.approxBytes());
@@ -391,6 +438,8 @@ int main() {
                 auto results_range_bp = priceBPlus.rangeQuery(lo, hi);
                 auto qEndBP = std::chrono::high_resolution_clock::now();
                 bplusQuerySec = std::chrono::duration<double>(qEndBP - qStartBP).count();
+
+                scanQuerySec = scanPriceRangeSec(records, lo, hi);
 
                 btreeMemMB = toMB(priceBTree.approxBytes());
                 bplusMemMB = toMB(priceBPlus.approxBytes());
@@ -447,9 +496,13 @@ int main() {
             bpl["memoryMB"] = bplusMemMB;
             metrics["bplustree"] = bpl;
 
+            // Sequential scan baseline
+            json scan = json::object();
+            scan["querySec"] = scanQuerySec;
+            metrics["scan"] = scan;
+
             // Live total process memory (RSS/Working Set)
             metrics["rssMB"] = getProcessMemoryMB();
-
             response["metrics"] = metrics;
 
             std::cout << response.dump() << std::endl;
