@@ -1,42 +1,34 @@
-CRYPTO & STOCK MARKET DATA ANALYZER
+# Stock & Cryptocurrency Analysis tool 
 
+## *Have you ever wanted to query information about a specific stock, general stock prices within the market during a period of time, or find stocks within the same price bracket?*
+## ***With this tool, you can!***
+  ### Prerequisites: g++, node, data in backend directory  
+### To run it:  
+Open terminal  
+Navigate to the project directory  
+cd backend  
+g++ -o server server.cpp (to compile the server)  
+npm start  
 
-PREREQUISITES
+*Open a new terminal*  
+cd frontend  
+npm start  
 
-- C++ compiler with C++17 support
-- Node.js (v14+) and npm
-- Data files: stocks.csv and crypto.csv in project root
+Select query type, enter query, and click run query!
 
+### Capabilities:
+Search by stock/crypto name (or crypto ticker), price range, or date range (each uses a b/b+-tree indexed respectively.  
+Visualize stock data
 
-INSTALLATION & RUNNING
+### Limitations:  
+Limited to only 500 output information per query  
+Cannot use ticker for stocks (data does not support this)
 
-1. Compile C++ Backend
-   
-   g++ -std=c++17 -O3 -o server server.cpp
-   
-   Note: On Windows, you may need MinGW or WSL to use g++.
-
-2. Install Node.js Dependencies
-   
-   npm install
-
-3. Start Backend Server
-   
-   node server.js
-   
-   Server runs on http://127.0.0.1:8080
-
-4. Start Frontend
-   
-   cd frontend
-   npm install
-   npm start
-   
-   Frontend runs on http://localhost:3000
-
-USAGE
-
-1. Select query type (Ticker, Date Range, or Price Range)
-2. Enter parameters (e.g., "Apple", date range, or price range)
-3. Click "Run Query"
-4. View results and performance comparison
+### Libraries/equations used:  
+JSON: https://json.nlohmann.me/  
+Express.js: https://expressjs.com/  
+CORS: https://github.com/expressjs/cors  
+React: https://react.dev/  
+g++: https://gcc.gnu.org/  
+Recharts: https://recharts.github.io/  
+Fowler–Noll–Vo hash function (for name-based indexing)
