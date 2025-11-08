@@ -1,6 +1,5 @@
-================================================================================
 CRYPTO & STOCK MARKET DATA ANALYZER
-================================================================================
+
 
 PREREQUISITES
 
@@ -41,18 +40,3 @@ USAGE
 2. Enter parameters (e.g., "Apple", date range, or price range)
 3. Click "Run Query"
 4. View results and performance comparison
-
-
-PROJECT STRUCTURE
-
-crypto-stock-analyzer/
-├── server.cpp              - C++ query engine
-├── BTree.h                 - B-Tree implementation
-├── BPlus.h                 - B+ Tree implementation  
-├── server.js               - Node.js API server
-├── stocks.csv              - Stock dataset
-├── crypto.csv              - Crypto dataset
-└── frontend/
-    └── src/
-        ├── App.js
-        └── PerformanceComparison.jsx
